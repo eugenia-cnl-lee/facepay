@@ -15,3 +15,7 @@ mediapipe==0.10.35
 
 # Encrypted template store (Tier 3)
 cryptography==49.0.0
+
+# Desktop terminal GUI
+customtkinter==6.0.0
+pillow==12.3.0
