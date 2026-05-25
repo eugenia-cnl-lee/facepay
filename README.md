@@ -178,7 +178,14 @@ pip install -r requirements.txt
 
 ## Usage
 
-**The full app** — rate-limit gate → liveness → identify → enrol if new → simulated payment:
+**The payment terminal (desktop app)** — a windowed pay-by-face device: type the amount on the
+keypad, approve with your face; higher amounts add a PIN or a second approver.
+
+```bash
+python app.py
+```
+
+**Enrol users first (sign-up)** with the console app — the terminal only *pays*:
 
 ```bash
 python facepay.py
@@ -217,7 +224,10 @@ python wallet.py refund <payment_id>     # payment id shown in history
 
 | File | Purpose |
 | --- | --- |
-| `facepay.py` | End-to-end app: rate-limit → liveness → identify → live enrol → simulated payment |
+| `app.py` | Desktop terminal GUI (customtkinter) — the pay-by-face device app |
+| `terminal.py` | Earlier full-screen OpenCV kiosk (superseded by `app.py`) |
+| `ui.py` | Drawing + click helpers for the OpenCV kiosk |
+| `facepay.py` | Console app: rate-limit → liveness → identify → live enrol → payment |
 | `recognition.py` | Embeddings, similarity matching, unknown-face rejection |
 | `liveness.py` | Challenge–response liveness (blink + head-turn) and the face overlay |
 | `template_store.py` | Encrypted SQLite store; separate identity / biometric tables |
