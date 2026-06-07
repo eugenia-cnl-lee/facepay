@@ -167,6 +167,51 @@ def draw_hud(display, title, detail, time_left):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 255), 2)
 
 
+# Frame-driven challenge (drives the GUI: one frame at a time)
+
+class Challenge:
+    def __init__(self):
+        self.deadline = time.monotonic() + CHALLENGE_SECONDS
+        self.passed = False
+        self.done = False
+        self.closed_frames = 0
+        self.blinks = 0
+        if random.choice(["blink", "turn"]) == "blink":
+            self.kind = "blink"
+            self.required = random.randint(MIN_BLINKS, MAX_BLINKS)
+        else:
+            self.kind = "turn"
+            self.direction = random.choice(["LEFT", "RIGHT"])
+
+    def update(self, landmarks, width, height):
+        if not self.done and landmarks is not None:
+            if self.kind == "blink":
+                ear = average_ear(landmarks, width, height)
+                if ear < EAR_THRESHOLD:
+                    self.closed_frames += 1
+                else:
+                    if self.closed_frames >= CONSECUTIVE_CLOSED_FRAMES:
+                        self.blinks += 1
+                    self.closed_frames = 0
+                if self.blinks >= self.required:
+                    self.passed = self.done = True
+            elif ((self.direction == "RIGHT" and head_yaw(landmarks) > YAW_THRESHOLD)
+                  or (self.direction == "LEFT" and head_yaw(landmarks) < -YAW_THRESHOLD)):
+                self.passed = self.done = True
+        if not self.passed and time.monotonic() > self.deadline:
+            self.done = True
+
+    @property
+    def seconds_left(self):
+        return max(0.0, self.deadline - time.monotonic())
+
+    @property
+    def status(self):
+        if self.kind == "blink":
+            return f"Blink {self.required} times  ({min(self.blinks, self.required)}/{self.required})"
+        return f"Turn your head {self.direction.lower()}"
+
+
 # Blink challenge
 
 def run_blink_challenge(landmarker, camera, start_time):
