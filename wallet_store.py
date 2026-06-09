@@ -7,6 +7,7 @@ radius). Money is stored as integer pence, never floats. Transfers are atomic
 """
 
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -108,22 +109,54 @@ def transfer(idempotency_key, payer, payee, amount_pence, kind="payment"):
     return {"status": "ok", "amount_pence": amount_pence}
 
 
-def refund(idempotency_key, original_key):
-    """Reverse a prior payment: credit the original payer, debit the payee."""
+def topup(name, amount_pence):
+    """Load funds onto an account (money coming in)."""
+    ensure_account(name, "customer")
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE accounts SET balance_pence = balance_pence + ? WHERE name = ?",
+            (amount_pence, name),
+        )
+        conn.execute(
+            "INSERT INTO payments (idempotency_key, payer, payee, amount_pence, kind, at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (uuid.uuid4().hex, "TOPUP", name, amount_pence, "topup", _now()),
+        )
+
+
+def refund(original_key):
+    """Reverse a prior payment: credit the original payer, debit the payee.
+
+    The refund's idempotency key is derived from the original, so refunding the
+    same payment twice is a no-op.
+    """
     init_db()
     with sqlite3.connect(DB_PATH) as conn:
         original = _find_payment(conn, original_key)
     if original is None:
         raise ValueError("Original payment not found")
     payer, payee, amount_pence = original
-    return transfer(idempotency_key, payee, payer, amount_pence, kind="refund")
+    return transfer(f"refund:{original_key}", payee, payer, amount_pence, kind="refund")
+
+
+def refund_by_id(payment_id):
+    """Refund a payment referenced by its row id (as shown in history)."""
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT idempotency_key FROM payments WHERE id = ? AND kind = 'payment'",
+            (payment_id,),
+        ).fetchone()
+    if row is None:
+        raise ValueError(f"no payment with id {payment_id}")
+    return refund(row[0])
 
 
 def history(name, limit=20):
     init_db()
     with sqlite3.connect(DB_PATH) as conn:
         return conn.execute(
-            "SELECT at, kind, payer, payee, amount_pence FROM payments "
+            "SELECT id, at, kind, payer, payee, amount_pence FROM payments "
             "WHERE payer = ? OR payee = ? ORDER BY id DESC LIMIT ?",
             (name, name, limit),
         ).fetchall()
