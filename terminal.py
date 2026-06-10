@@ -259,7 +259,9 @@ def run_once(camera, landmarker, mouse):
 
     if not charge(name, amount):
         audit.log("payment_declined", name, "insufficient funds")
-        screen_result(camera, False, "Declined", "Insufficient funds")
+        balance = wallet_store.get_balance(name)
+        screen_result(camera, False, "Declined - insufficient funds",
+                      f"{name} - balance {wallet_store.format_money(balance)}, needs {wallet_store.format_money(amount)}")
         return True
 
     audit.log("payment", name, f"{wallet_store.format_money(amount)} to {MERCHANT_NAME}")
