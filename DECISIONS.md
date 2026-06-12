@@ -203,6 +203,7 @@ interview angle.
 - **Why:** requiring strong auth on every tiny payment is bad UX; requiring none on a large or suspicious payment is bad security. Risk-based / step-up auth balances them — this is exactly how **PSD2 Strong Customer Authentication** works (low-value payments are exempt). It combines **inherence** (face) + **knowledge** (PIN) into MFA *only when it matters*.
 - **PIN is hashed, not encrypted — deliberately.** A PIN is matched *exactly*, so salted **PBKDF2** hashing is the right primitive, with a **constant-time** comparison. This is the exact counterpart to encrypting biometrics (which *can't* be hashed because matching is approximate, D20). Knowing **when to hash vs encrypt** is a core security signal.
 - **Capstone:** this is where the pieces become one system — recognition + liveness + rate-limiting + payment + PIN, unified by a single risk decision, all audited.
+- **UX/security fix:** setting a PIN requires entering it **twice** (set + confirm). This surfaced in testing — a first-time "set" could be blown past without realising you were *choosing* the PIN, leaving a PIN you couldn't recall. Confirmation makes setting unmistakable (standard for any PIN/password setup).
 - **Interview angle:** *"When do you hash vs encrypt?"* (PIN vs biometric) and *"how do you balance security with UX?"* (risk-based step-up / PSD2 SCA).
 
 ### D25 — Dual control top rung + security limits are policy, not preference
@@ -210,3 +211,14 @@ interview angle.
 - **Why:** even face + PIN is one compromise away from a large fraud; an independent second human is defence-in-depth for the biggest transactions. This is standard practice — four-eyes / maker-checker for wire transfers and privileged actions.
 - **Security limits are policy, NOT user preference (deliberate):** the thresholds are fixed constants, not user-editable. *A limit the account holder can raise is one an attacker who controls the account can disable* — self-defeating. The mature pattern, which this reflects: secure defaults; users may **tighten** freely; **loosening** must itself require step-up + audit; and the strongest control (dual approval) is **policy-fixed, not editable at all**. We deliberately did **not** add a "set your own limit" prompt.
 - **Interview angle:** *"Should users configure their own security thresholds?"* → No, naively — it's an anti-pattern (an attacker in the account switches the controls off). Correct pattern: tighten-only, loosening requires step-up, top controls are policy.
+
+---
+
+## Phase 7 — Frontend (kiosk terminal)
+
+### D26 — Kiosk UI in OpenCV; real engine, sandboxed money
+- **Decision:** The frontend is a **full-screen OpenCV kiosk** — a payment-device screen (amount buttons, face view, on-screen PIN keypad, big approve/decline) — not a web app or a CLI. It matches the product identity: a **pay-by-face terminal, single user = the payer.**
+- **Why OpenCV, not web:** it looks like *hardware*, keeps one tech stack, reuses the existing camera pipeline, and is finishable; a browser app would re-plumb the whole camera flow and undercut the "device" feel.
+- **Real vs simulated (the honest framing):** the auth engine — recognition, liveness, encrypted templates, risk ladder, dual control, audit — genuinely runs. **Only the money settlement is sandboxed** (play money, no bank rails). A UI on real logic is *not* a simulation: strip the UI away and the engine still works (that's the `facepay.py` console version).
+- **Separation of concerns:** enrolment (sign-up) is a console/admin action (`facepay.py`); the kiosk (`terminal.py`) only authenticates and pays.
+- **Interview angle:** *"Is this real or a simulation?"* → the security engine is real and functional; only settlement is sandboxed, which is standard for a prototype.
