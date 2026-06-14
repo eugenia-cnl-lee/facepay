@@ -145,8 +145,12 @@ def prompt_amount():
 
 def step_up_pin(name):
     if not pin_auth.has_pin(name):
-        pin = input("This payment needs a PIN — set one now: ").strip()
+        print("No PIN set yet — choose one now for high-value payments.")
+        pin = input("Set a PIN: ").strip()
         if not pin:
+            return False
+        if input("Confirm your PIN: ").strip() != pin:
+            print("PINs did not match. Cancelled.")
             return False
         pin_auth.set_pin(name, pin)
         print("PIN set.")
