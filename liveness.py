@@ -38,11 +38,11 @@ NOSE_TIP = 1
 LEFT_EYE_OUTER = 33
 RIGHT_EYE_OUTER = 263
 
-BRACKET_OPACITY = 0.5    # opacity of the corner brackets drawn around the face
-BRACKET_COLOR = (0, 255, 0)
-BRACKET_THICKNESS = 1
-BRACKET_LENGTH = 15      # length of each corner line (shorter = smaller brackets)
-BRACKET_PADDING = 20     # pixels to expand the face box outward
+BRACKET_OPACITY = 0.95   # opacity of the corner brackets drawn around the face
+BRACKET_COLOR = (60, 255, 120)
+BRACKET_THICKNESS = 3
+BRACKET_LENGTH = 28      # length of each corner line (shorter = smaller brackets)
+BRACKET_PADDING = 22     # pixels to expand the face box outward
 
 MODEL_PATH = Path("face_landmarker.task")
 MODEL_URL = (
