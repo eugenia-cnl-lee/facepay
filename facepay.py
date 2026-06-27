@@ -25,6 +25,7 @@ from liveness import (
     draw_face_overlay,
     run_challenge,
 )
+import approval
 import audit
 import pin_auth
 import rate_limit
@@ -123,6 +124,9 @@ def enrol_live(camera, database, landmarker, start_time):
         database[name] = embeddings
         audit.log("enrol", name, f"{len(embeddings)} templates")
         print(f"Enrolled {name}: {len(embeddings)} encrypted template(s) stored, no raw image kept.")
+        if input("Is this person an authorised approver (e.g. a manager)? [y/N]: ").strip().lower() == "y":
+            approval.mark_approver(name)
+            print(f"{name} can now approve high-value payments.")
     else:
         print("Enrolment failed — no clear face captured.")
 
@@ -153,6 +157,15 @@ def step_up_pin(name):
             return True
         print("Incorrect PIN.")
     return False
+
+
+def dual_approve(camera, database, landmarker, start_time, payer):
+    print("This payment needs a second approver. Approver, look at the camera.")
+    input("Press Enter when the approver is ready...")
+    if not run_challenge(landmarker, camera, start_time):
+        return False, "approver liveness failed"
+    approver, _ = scan_and_identify(camera, database, landmarker, start_time)
+    return approval.check(payer, approver)
 
 
 # Payment
@@ -231,7 +244,8 @@ def main():
         print(f"Recognised: {name} (distance {distance:.3f}).")
 
         decision, reason = risk.assess(amount_pence, rate_limit.failure_count())
-        if decision == "step_up":
+
+        if decision in ("pin_stepup", "dual_approval"):
             print(f"Step-up required ({reason}).")
             audit.log("stepup_required", name, reason)
             if not step_up_pin(name):
@@ -240,6 +254,15 @@ def main():
                 cleanup(camera, landmarker)
                 return
             audit.log("stepup_success", name, reason)
+
+        if decision == "dual_approval":
+            approved, why = dual_approve(camera, database, landmarker, start_time, name)
+            audit.log("dual_approval_granted" if approved else "dual_approval_denied", name, why)
+            if not approved:
+                print(f"Dual approval failed: {why}. Payment cancelled.")
+                cleanup(camera, landmarker)
+                return
+            print("Dual approval granted.")
 
         take_payment(name, amount_pence)
 
