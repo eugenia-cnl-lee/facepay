@@ -28,6 +28,8 @@ wide on surface features.
 - No raw-image retention — enrolment frames are embedded then deleted
 - Separate identity and biometric tables
 - Persisted rate limiting / lockout against hill-climbing attacks
+- Risk-based step-up — PIN required on top of the face for high-value or suspicious payments (PSD2-style SCA)
+- PINs hashed (PBKDF2), biometrics encrypted — the correct primitive for each
 - Append-only audit log of enrolment and every authentication decision
 - Written threat model (STRIDE + biometric-specific)
 
@@ -60,7 +62,10 @@ flowchart LR
     B -->|pass| C[Detect + embed face]
     C --> D{1:N match vs<br/>encrypted templates}
     D -->|unknown| E[Offer live enrolment<br/>encrypt + store, drop raw image]
-    D -->|match| F[Authorise payment<br/>simulated]
+    D -->|match| K{Risk check<br/>amount / failure history}
+    K -->|elevated| P[PIN step-up]
+    K -->|low| F[Charge wallet<br/>atomic + idempotent]
+    P --> F
     F --> G[Audit log]
 ```
 
@@ -220,6 +225,8 @@ python wallet.py refund <payment_id>     # payment id shown in history
 | `wallet.py` | Wallet CLI — `balance` / `history` / `refund` subcommands |
 | `rate_limit.py` | Persisted attempt-limiting / lockout (anti hill-climbing) |
 | `audit.py` | Append-only audit log |
+| `risk.py` | Risk engine — face-only vs step-up from amount + failure history |
+| `pin_auth.py` | PIN step-up (hashed PBKDF2) — knowledge factor for high-risk payments |
 | `build_dataset.py` | Builds the LFW evaluation gallery + genuine/stranger test sets |
 | `evaluate.py` | FAR / FRR / misidentification across thresholds |
 | `logging_setup.py` | Silences TensorFlow startup logs (imported before deepface) |
