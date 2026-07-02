@@ -193,3 +193,14 @@ interview angle.
   - Refunds — reversal (self-test: £4 charge → refund → balance restored)
   - Every payment authorised by the face and written to the audit log
 - **Interview angle:** *"How do you stop double-charges and lost money?"* → idempotency keys + atomic transactions + integer money; and *"why a separate DB?"* → biometric/financial isolation.
+
+---
+
+## Phase 6 — Risk-based authentication (Tier 6)
+
+### D24 — Adaptive step-up authentication (the capstone)
+- **Decision:** Authentication strength **adapts to risk**. Low-risk (small amount, no recent failures) → **face only**. Higher-risk (amount ≥ £50, or ≥2 recent failures) → **face + PIN** (two-factor). ≥5 failures → **hard lockout** (rate_limit).
+- **Why:** requiring strong auth on every tiny payment is bad UX; requiring none on a large or suspicious payment is bad security. Risk-based / step-up auth balances them — this is exactly how **PSD2 Strong Customer Authentication** works (low-value payments are exempt). It combines **inherence** (face) + **knowledge** (PIN) into MFA *only when it matters*.
+- **PIN is hashed, not encrypted — deliberately.** A PIN is matched *exactly*, so salted **PBKDF2** hashing is the right primitive, with a **constant-time** comparison. This is the exact counterpart to encrypting biometrics (which *can't* be hashed because matching is approximate, D20). Knowing **when to hash vs encrypt** is a core security signal.
+- **Capstone:** this is where the pieces become one system — recognition + liveness + rate-limiting + payment + PIN, unified by a single risk decision, all audited.
+- **Interview angle:** *"When do you hash vs encrypt?"* (PIN vs biometric) and *"how do you balance security with UX?"* (risk-based step-up / PSD2 SCA).
