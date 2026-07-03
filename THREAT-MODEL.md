@@ -72,6 +72,7 @@ STRIDE codes: **S**poofing · **T**ampering · **R**epudiation · **I**nfo discl
 | T10 | **Template linkage** — same template correlates the user across systems | I | Cross-system tracking | Cancelable / transformed templates (revocable transform) | ⏭️ |
 | T11 | **Frame injection / deepfake feed** — bypass the camera, feed synthetic frames straight to the pipeline | S | Full liveness bypass | Hardware attestation / secure camera path | ⏭️ |
 | T12 | **Transport interception** — read/alter data in a client↔server split | I / T | Data theft / MITM | TLS in transit (only relevant once distributed) | ⏭️ Tier 7 |
+| T13 | **Single-factor compromise** — a spoof or stolen biometric clears a high-value payment on the face alone | S / E | Large fraudulent charge | **Risk-based step-up** — PIN (knowledge factor) required on top of the face for high-value / suspicious payments | ✅ |
 
 ## 6. Residual risks (where this system honestly breaks)
 
