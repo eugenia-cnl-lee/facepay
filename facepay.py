@@ -1,11 +1,11 @@
-"""FacePay — end-to-end demo: prove liveness, identify, then (simulated) pay.
+"""FacePay — end-to-end app: rate-limit, liveness, identify, risk-based pay.
 
 Flow:
-  1. Enrol known faces from known/.
+  1. Load enrolled templates from the encrypted store; deny if rate-limited.
   2. Liveness challenge (blink or head-turn) — the gate.
-  3. On pass, scan and identify the face.
-  4. If unknown, offer live multi-frame enrolment.
-  5. On a match, run a simulated payment (real payment is Tier 4).
+  3. Scan and identify the face (offer live enrolment if unknown).
+  4. Risk-based step-up: higher-risk payments require a PIN on top of the face.
+  5. Charge the wallet (atomic, idempotent) and write to the audit log.
 
 Run:  python facepay.py
 """
@@ -26,7 +26,9 @@ from liveness import (
     run_challenge,
 )
 import audit
+import pin_auth
 import rate_limit
+import risk
 import template_store
 import wallet_store
 from recognition import create_embedding, identify_face
@@ -42,7 +44,7 @@ ENROL_FRAME_GAP_SECONDS = 0.4
 MAX_ENROL_ATTEMPTS = 30
 
 MERCHANT_NAME = "FacePay_Merchant"
-OPENING_BALANCE_PENCE = 5000   # a new customer starts with £50.00 (demo)
+OPENING_BALANCE_PENCE = 50000   # a new customer starts with £500.00 (demo)
 PAYMENT_AMOUNT_PENCE = 400     # £4.00 per purchase
 
 
@@ -125,15 +127,43 @@ def enrol_live(camera, database, landmarker, start_time):
         print("Enrolment failed — no clear face captured.")
 
 
-# Payment (simulated placeholder for Tier 4)
+# Risk-based step-up
 
-def take_payment(name):
+def prompt_amount():
+    raw = input("Amount to pay in GBP [4.00]: ").strip()
+    if not raw:
+        return PAYMENT_AMOUNT_PENCE
+    try:
+        return max(0, round(float(raw) * 100))
+    except ValueError:
+        return PAYMENT_AMOUNT_PENCE
+
+
+def step_up_pin(name):
+    if not pin_auth.has_pin(name):
+        pin = input("This payment needs a PIN — set one now: ").strip()
+        if not pin:
+            return False
+        pin_auth.set_pin(name, pin)
+        print("PIN set.")
+        return True
+
+    for _ in range(3):
+        if pin_auth.verify_pin(name, input("Higher-risk payment — enter your PIN: ").strip()):
+            return True
+        print("Incorrect PIN.")
+    return False
+
+
+# Payment
+
+def take_payment(name, amount_pence):
     wallet_store.ensure_account(name, "customer", OPENING_BALANCE_PENCE)
     wallet_store.ensure_account(MERCHANT_NAME, "merchant", 0)
 
     key = uuid.uuid4().hex   # one idempotency key per purchase; a retry charges once
     try:
-        wallet_store.transfer(key, name, MERCHANT_NAME, PAYMENT_AMOUNT_PENCE)
+        wallet_store.transfer(key, name, MERCHANT_NAME, amount_pence)
     except wallet_store.InsufficientFunds:
         balance = wallet_store.get_balance(name)
         print(f"[PAYMENT] Declined — insufficient funds (balance {wallet_store.format_money(balance)}).")
@@ -141,7 +171,7 @@ def take_payment(name):
         return
 
     balance = wallet_store.get_balance(name)
-    amount = wallet_store.format_money(PAYMENT_AMOUNT_PENCE)
+    amount = wallet_store.format_money(amount_pence)
     print(f"[PAYMENT] {amount} charged from {name} to {MERCHANT_NAME}. "
           f"New balance: {wallet_store.format_money(balance)}.")
     audit.log("payment", name, f"{amount} to {MERCHANT_NAME}")
@@ -165,6 +195,8 @@ def main():
         audit.log("lockout", detail=f"{wait}s remaining")
         print(f"Locked: too many failed attempts. Try again in {wait}s. (anti hill-climbing)")
         return
+
+    amount_pence = prompt_amount()
 
     landmarker = create_landmarker()
     camera = cv2.VideoCapture(0)
@@ -197,7 +229,19 @@ def main():
         rate_limit.record("success")
         audit.log("auth_success", name, f"distance={distance:.3f}")
         print(f"Recognised: {name} (distance {distance:.3f}).")
-        take_payment(name)
+
+        decision, reason = risk.assess(amount_pence, rate_limit.failure_count())
+        if decision == "step_up":
+            print(f"Step-up required ({reason}).")
+            audit.log("stepup_required", name, reason)
+            if not step_up_pin(name):
+                print("Step-up failed. Payment cancelled.")
+                audit.log("stepup_failure", name, reason)
+                cleanup(camera, landmarker)
+                return
+            audit.log("stepup_success", name, reason)
+
+        take_payment(name, amount_pence)
 
     cleanup(camera, landmarker)
 
