@@ -41,6 +41,18 @@ def record(outcome):
         conn.execute("INSERT INTO auth_attempts (outcome, at) VALUES (?, ?)", (outcome, _now()))
 
 
+def failure_count():
+    """Number of failures inside the current window (a risk signal)."""
+    _init()
+    cutoff = _now() - WINDOW_SECONDS
+    with sqlite3.connect(DB_PATH) as conn:
+        (count,) = conn.execute(
+            "SELECT COUNT(*) FROM auth_attempts WHERE outcome = 'failure' AND at >= ?",
+            (cutoff,),
+        ).fetchone()
+    return count
+
+
 def locked_out():
     """Return (is_locked, seconds_remaining)."""
     _init()
