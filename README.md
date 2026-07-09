@@ -11,6 +11,35 @@ wide on surface features.
 
 ---
 
+## Features
+
+**Recognition**
+- 1:N face identification from a live webcam (FaceNet512 embeddings, cosine matching)
+- Unknown-face rejection at an evidence-tuned decision threshold
+- Live multi-frame enrolment (no posed photos needed)
+
+**Liveness / anti-spoofing**
+- Randomised challenge–response — blink *and* head-turn, chosen at random
+- Eye-Aspect-Ratio blink detection and head-pose yaw estimation
+- Real-time face overlay (detection brackets) during every stage
+
+**Security**
+- Biometric templates encrypted at rest (Fernet/AES), key stored outside the database
+- No raw-image retention — enrolment frames are embedded then deleted
+- Separate identity and biometric tables
+- Persisted rate limiting / lockout against hill-climbing attacks
+- Append-only audit log of enrolment and every authentication decision
+- Written threat model (STRIDE + biometric-specific)
+
+**Payments**
+- Face-authorised payments from a simulated wallet
+- Atomic, idempotent transfers in integer pence (no double-charges, no float errors)
+- Customer + merchant accounts in a financial database separate from biometrics
+- Transaction history and refunds via a CLI
+
+**Evaluation**
+- False-accept / false-reject / misidentification measured across thresholds on LFW
+
 ## What this project demonstrates
 
 - **Computer vision & applied ML** — face detection, FaceNet512 embeddings, 1:N identification, and a from-evidence decision threshold (not a guessed constant).
@@ -174,8 +203,9 @@ python -c "import audit; [print(r) for r in audit.recent()]"
 **Wallet — balance, history, refund:**
 
 ```bash
-python -c "import wallet_store as w; print(w.format_money(w.get_balance('eugenia')))"
-python -c "import wallet_store as w; [print(r) for r in w.history('eugenia')]"
+python wallet.py balance eugenia
+python wallet.py history eugenia
+python wallet.py refund <payment_id>     # payment id shown in history
 ```
 
 ## Project structure
@@ -187,6 +217,7 @@ python -c "import wallet_store as w; [print(r) for r in w.history('eugenia')]"
 | `liveness.py` | Challenge–response liveness (blink + head-turn) and the face overlay |
 | `template_store.py` | Encrypted SQLite store; separate identity / biometric tables |
 | `wallet_store.py` | Accounts + wallet in a separate DB; atomic, idempotent, integer-money transfers + refunds |
+| `wallet.py` | Wallet CLI — `balance` / `history` / `refund` subcommands |
 | `rate_limit.py` | Persisted attempt-limiting / lockout (anti hill-climbing) |
 | `audit.py` | Append-only audit log |
 | `build_dataset.py` | Builds the LFW evaluation gallery + genuine/stranger test sets |
