@@ -174,3 +174,22 @@ interview angle.
 - **Why:** non-repudiation and forensics. If a user disputes a transaction, or you need to reconstruct an attack, the trail exists. Append-only matters: a mutable log an attacker can edit is worthless as evidence.
 - **What's logged:** timestamp (UTC), event, subject (identity where relevant), detail (e.g. match distance). Raw biometrics are *never* written to the log — only metadata.
 - **Interview angle:** *"How would you investigate a fraud claim?"* → the audit trail; and why it's append-only.
+
+---
+
+## Phase 5 — Payment (Tier 4)
+
+### D23 — Payment *correctness* over payment *features*
+- **Decision:** The wallet prioritises correctness: money is **integer pence** (never float); transfers are **atomic** (debit + credit + record in one DB transaction); **idempotent** (a repeated idempotency key charges once); and financial data lives in a **separate DB** (`wallet.db`) from the biometric store.
+- **Why each:** floats leak money to rounding; a non-atomic transfer can lose or duplicate money on a crash; without idempotency a retried request double-charges; separating financial from biometric data is least privilege / smaller blast radius (mirrors D20).
+- **Scope call:** kept features minimal — single currency, single method (the face is the credential), one merchant. Verified atomicity + idempotency + refund with a self-test (pay £4 → retry same key → balance unchanged → refund restores it).
+- **Deferred to Tier 5:** proper **double-entry ledger**, immutable entries, reconciliation, and concurrency control. Tier 4's payment is designed with the idempotency key + atomic update that Tier 5 formalises.
+- **Authorisation + non-repudiation:** every payment only fires after a positive biometric match (the face *is* the credential) and is written to the append-only audit log (D22) — so authorisation and the money movement it triggers are both evidenced, not just the money movement alone.
+- **Quick-recall summary (for interviews):**
+  - Integer-pence money — no float rounding errors
+  - Atomic transfers — debit + credit + record in one DB transaction (ACID)
+  - Idempotency keys — a retried payment charges once (self-test proved balance stays put on retry)
+  - Separate financial DB — `wallet.db` isolated from `faces.db` (biometric/financial separation)
+  - Refunds — reversal (self-test: £4 charge → refund → balance restored)
+  - Every payment authorised by the face and written to the audit log
+- **Interview angle:** *"How do you stop double-charges and lost money?"* → idempotency keys + atomic transactions + integer money; and *"why a separate DB?"* → biometric/financial isolation.
