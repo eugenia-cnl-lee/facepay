@@ -70,6 +70,14 @@ Anchored by a [threat model](THREAT-MODEL.md). Key controls:
 - **Rate limiting** — persisted attempt-limiting/lockout to defeat **hill-climbing** (probing the similarity score toward acceptance); persisted so a restart can't reset it.
 - **Append-only audit log** — enrolment and every auth decision, for non-repudiation.
 
+### 4. Payment (correctness over features)
+
+On a successful match, the face **authorises** a payment: the customer's wallet is debited and
+the merchant's credited **atomically** (one DB transaction), **idempotently** (a retried request
+charges once, via an idempotency key), with money as **integer pence** (never floats). Accounts
+and balances live in a **separate database** from the biometric store. Refunds reverse a payment.
+The full double-entry ledger (immutable entries, reconciliation, concurrency) is the next pillar.
+
 ## Results & evidence
 
 **Threshold selection** — 30 genuine + 30 stranger images (LFW), false-accept vs false-reject
@@ -163,6 +171,13 @@ python liveness.py          # random blink/head-turn challenge with a face overl
 python -c "import audit; [print(r) for r in audit.recent()]"
 ```
 
+**Wallet — balance, history, refund:**
+
+```bash
+python -c "import wallet_store as w; print(w.format_money(w.get_balance('eugenia')))"
+python -c "import wallet_store as w; [print(r) for r in w.history('eugenia')]"
+```
+
 ## Project structure
 
 | File | Purpose |
@@ -171,6 +186,7 @@ python -c "import audit; [print(r) for r in audit.recent()]"
 | `recognition.py` | Embeddings, similarity matching, unknown-face rejection |
 | `liveness.py` | Challenge–response liveness (blink + head-turn) and the face overlay |
 | `template_store.py` | Encrypted SQLite store; separate identity / biometric tables |
+| `wallet_store.py` | Accounts + wallet in a separate DB; atomic, idempotent, integer-money transfers + refunds |
 | `rate_limit.py` | Persisted attempt-limiting / lockout (anti hill-climbing) |
 | `audit.py` | Append-only audit log |
 | `build_dataset.py` | Builds the LFW evaluation gallery + genuine/stranger test sets |
@@ -200,5 +216,5 @@ Being explicit about where this breaks (see the threat model's residual-risk sec
 - **No frame-injection defence** — an attacker who bypasses the physical camera defeats liveness; needs hardware attestation.
 - **Key management** — the encryption key sits in a local file; production needs an env var / OS keystore / KMS, plus **key rotation**.
 - **Cancelable templates** — a revocable transform (so a stolen template can be reissued) is designed-for but not implemented.
-- **Payment & ledger** — payment is simulated; a real double-entry ledger with idempotency is out of scope here.
+- **Payment & ledger** — the wallet moves *simulated* money, but atomically, idempotently, and in integer pence. Real card rails and a proper **double-entry ledger** (immutable entries, reconciliation, concurrency) are the next pillar (Tier 5).
 - **Latency** — deep-net inference runs on CPU; a systematic on-device-vs-cloud latency study is the natural next pillar.
