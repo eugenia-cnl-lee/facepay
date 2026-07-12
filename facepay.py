@@ -13,6 +13,7 @@ Run:  python facepay.py
 import logging_setup  # noqa: F401  — MUST precede heavy imports; silences TF/absl logs
 
 import time
+import uuid
 from pathlib import Path
 
 import cv2
@@ -27,6 +28,7 @@ from liveness import (
 import audit
 import rate_limit
 import template_store
+import wallet_store
 from recognition import create_embedding, identify_face
 
 
@@ -38,7 +40,10 @@ SCAN_RETRY_GAP_SECONDS = 0.1
 ENROL_FRAMES = 5
 ENROL_FRAME_GAP_SECONDS = 0.4
 MAX_ENROL_ATTEMPTS = 30
-PAYMENT_AMOUNT = 4.00
+
+MERCHANT_NAME = "FacePay_Merchant"
+OPENING_BALANCE_PENCE = 5000   # a new customer starts with £50.00 (demo)
+PAYMENT_AMOUNT_PENCE = 400     # £4.00 per purchase
 
 
 # Capture
@@ -123,7 +128,23 @@ def enrol_live(camera, database, landmarker, start_time):
 # Payment (simulated placeholder for Tier 4)
 
 def take_payment(name):
-    print(f"[PAYMENT] Charging GBP {PAYMENT_AMOUNT:.2f} from {name}'s wallet... done (simulated).")
+    wallet_store.ensure_account(name, "customer", OPENING_BALANCE_PENCE)
+    wallet_store.ensure_account(MERCHANT_NAME, "merchant", 0)
+
+    key = uuid.uuid4().hex   # one idempotency key per purchase; a retry charges once
+    try:
+        wallet_store.transfer(key, name, MERCHANT_NAME, PAYMENT_AMOUNT_PENCE)
+    except wallet_store.InsufficientFunds:
+        balance = wallet_store.get_balance(name)
+        print(f"[PAYMENT] Declined — insufficient funds (balance {wallet_store.format_money(balance)}).")
+        audit.log("payment_declined", name, "insufficient funds")
+        return
+
+    balance = wallet_store.get_balance(name)
+    amount = wallet_store.format_money(PAYMENT_AMOUNT_PENCE)
+    print(f"[PAYMENT] {amount} charged from {name} to {MERCHANT_NAME}. "
+          f"New balance: {wallet_store.format_money(balance)}.")
+    audit.log("payment", name, f"{amount} to {MERCHANT_NAME}")
 
 
 # Main
