@@ -33,3 +33,6 @@ face_landmarker.task
 # (the key decrypts biometric templates; the DB holds them)
 faces.db
 facepay.key
+
+# Wallet / financial data — never committed
+wallet.db
