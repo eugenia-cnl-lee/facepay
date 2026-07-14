@@ -168,3 +168,9 @@ interview angle.
 - **Why this specific control:** the biometric-specific attack is **hill-climbing / similarity-probing** — an attacker repeatedly presents tweaked inputs, watches the distance score, and climbs toward acceptance. Limiting attempts denies the feedback loop that attack depends on. (NIST SP 800-63B likewise caps false-match attempts.)
 - **Design choice:** persistence matters — a counter held only in memory would reset on restart, so a determined attacker could just relaunch. Storing attempts in SQLite closes that.
 - **Interview angle:** *"How would someone attack a matcher, and how did you stop it?"* → describe hill-climbing, then the persisted attempt-limit + lockout. Naming the attack is the signal.
+
+### D22 — Append-only audit log (mitigates T8)
+- **Decision:** Log every security-relevant event — enrolment, auth success/failure, liveness failure, lockout — to an **append-only** `audit_log` table (insert only, never update/delete).
+- **Why:** non-repudiation and forensics. If a user disputes a transaction, or you need to reconstruct an attack, the trail exists. Append-only matters: a mutable log an attacker can edit is worthless as evidence.
+- **What's logged:** timestamp (UTC), event, subject (identity where relevant), detail (e.g. match distance). Raw biometrics are *never* written to the log — only metadata.
+- **Interview angle:** *"How would you investigate a fraud claim?"* → the audit trail; and why it's append-only.
