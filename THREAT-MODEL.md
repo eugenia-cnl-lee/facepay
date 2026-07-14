@@ -67,7 +67,7 @@ STRIDE codes: **S**poofing · **T**ampering · **R**epudiation · **I**nfo discl
 | T5 | **Template theft** — DB is stolen; embeddings reused or a face reconstructed | I | Permanent biometric compromise | **Encrypt templates at rest** (can't hash — approximate matching) + key management + **no raw images retained** + separate identity/biometric stores | ⬜ |
 | T6 | **Hill-climbing / similarity probing** — repeatedly tweak an input, watch the score, climb toward acceptance | I / S | Forged accepting input | **Rate limiting** + lockout on the match path (persisted, so a restart can't reset it) | ✅ |
 | T7 | **Enrolment poisoning** — attacker enrols *their* face under the victim's name | S / E | Account takeover at the root | Secure enrolment (identity proofing / step-up before enrol) | ⬜ |
-| T8 | **Repudiation** — user denies a transaction they made | R | Dispute / fraud | **Audit log** of every enrolment and match | ⬜ |
+| T8 | **Repudiation** — user denies a transaction they made | R | Dispute / fraud | **Append-only audit log** of enrolment, auth decisions, liveness failures, lockouts | ✅ |
 | T9 | **Raw image exposure** — stored enrolment photos leak | I | Biometric + PII leak | **Store no raw image after enrolment** (keep only the encrypted vector) | ⬜ |
 | T10 | **Template linkage** — same template correlates the user across systems | I | Cross-system tracking | Cancelable / transformed templates (revocable transform) | ⏭️ |
 | T11 | **Frame injection / deepfake feed** — bypass the camera, feed synthetic frames straight to the pipeline | S | Full liveness bypass | Hardware attestation / secure camera path | ⏭️ |
