@@ -24,6 +24,7 @@ from liveness import (
     draw_face_overlay,
     run_challenge,
 )
+import audit
 import rate_limit
 import template_store
 from recognition import create_embedding, identify_face
@@ -113,6 +114,7 @@ def enrol_live(camera, database, landmarker, start_time):
     if embeddings:
         template_store.enrol_identity(name, embeddings)
         database[name] = embeddings
+        audit.log("enrol", name, f"{len(embeddings)} templates")
         print(f"Enrolled {name}: {len(embeddings)} encrypted template(s) stored, no raw image kept.")
     else:
         print("Enrolment failed — no clear face captured.")
@@ -139,6 +141,7 @@ def main():
 
     locked, wait = rate_limit.locked_out()
     if locked:
+        audit.log("lockout", detail=f"{wait}s remaining")
         print(f"Locked: too many failed attempts. Try again in {wait}s. (anti hill-climbing)")
         return
 
@@ -153,6 +156,7 @@ def main():
     if not run_challenge(landmarker, camera, start_time):
         print("Liveness failed. Access denied.")
         rate_limit.record("failure")
+        audit.log("liveness_failure")
         cleanup(camera, landmarker)
         return
     print("Liveness passed.\n")
@@ -164,11 +168,13 @@ def main():
         print("No face detected. Please re-run and face the camera after the challenge.")
     elif name == "UNKNOWN":
         rate_limit.record("failure")
+        audit.log("auth_failure", detail=f"closest={distance:.3f}")
         print(f"Not recognised (closest distance {distance:.3f}).")
         if input("Enrol as a new user? [y/N]: ").strip().lower() == "y":
             enrol_live(camera, database, landmarker, start_time)
     else:
         rate_limit.record("success")
+        audit.log("auth_success", name, f"distance={distance:.3f}")
         print(f"Recognised: {name} (distance {distance:.3f}).")
         take_payment(name)
 
