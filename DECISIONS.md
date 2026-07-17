@@ -162,3 +162,9 @@ interview angle.
 - **Honest limits (future work):** the key currently sits in a local gitignored file (`facepay.key`); production would use an env var / OS keystore / KMS. **Key rotation** and **cancelable templates** are not implemented.
 - **Side benefit:** the app now loads templates from the DB instead of re-embedding a folder every launch — startup is fast.
 - **Interview angle:** *"How did you protect the biometric data?"* → encrypt-not-hash (with the reason), store separation, no raw retention, and where the key lives (and honestly, where it should live).
+
+### D21 — Rate limiting as anti-hill-climbing (mitigates T6)
+- **Decision:** Lock out authentication after `MAX_FAILURES` (5) failures in a sliding `WINDOW_SECONDS` (60s). Attempts are **persisted in the DB**, so restarting the app does not reset the counter.
+- **Why this specific control:** the biometric-specific attack is **hill-climbing / similarity-probing** — an attacker repeatedly presents tweaked inputs, watches the distance score, and climbs toward acceptance. Limiting attempts denies the feedback loop that attack depends on. (NIST SP 800-63B likewise caps false-match attempts.)
+- **Design choice:** persistence matters — a counter held only in memory would reset on restart, so a determined attacker could just relaunch. Storing attempts in SQLite closes that.
+- **Interview angle:** *"How would someone attack a matcher, and how did you stop it?"* → describe hill-climbing, then the persisted attempt-limit + lockout. Naming the attack is the signal.
