@@ -76,6 +76,7 @@ python liveness.py
 | `facepay.py` | End-to-end app: liveness gate → identify → live enrol → simulated payment |
 | `recognition.py` | Enrolment, embeddings, similarity matching, webcam scan, unknown-face rejection |
 | `template_store.py` | Encrypted SQLite store for face templates (separate identity/biometric tables) |
+| `rate_limit.py` | Persisted attempt-limiting / lockout (anti hill-climbing) |
 | `build_dataset.py` | Builds `known/` and `test/` from the LFW dataset |
 | `liveness.py` | Challenge-response liveness: blink + head-turn (MediaPipe landmarks) |
 | `evaluate.py` | Reports false-accept / false-reject / misidentification rates per threshold |
