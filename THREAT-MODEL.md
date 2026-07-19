@@ -65,7 +65,7 @@ STRIDE codes: **S**poofing · **T**ampering · **R**epudiation · **I**nfo discl
 | T3 | **Stranger false-accept** — an unrelated person is accepted | S | Wrong person pays | Decision threshold tuned from FAR/FRR data (0.25 → 0% false-accept on test set) | ✅ |
 | T4 | **Misidentification** — accepted as the *wrong* enrolled user | T | Wrong account charged | Threshold + **gallery hygiene** (only real principals enrolled; eval data kept separate) — see decision D18 | ✅ |
 | T5 | **Template theft** — DB is stolen; embeddings reused or a face reconstructed | I | Permanent biometric compromise | **Encrypt templates at rest** (can't hash — approximate matching) + key management + **no raw images retained** + separate identity/biometric stores | ⬜ |
-| T6 | **Hill-climbing / similarity probing** — repeatedly tweak an input, watch the score, climb toward acceptance | I / S | Forged accepting input | **Rate limiting** + lockout on the match path | ⬜ |
+| T6 | **Hill-climbing / similarity probing** — repeatedly tweak an input, watch the score, climb toward acceptance | I / S | Forged accepting input | **Rate limiting** + lockout on the match path (persisted, so a restart can't reset it) | ✅ |
 | T7 | **Enrolment poisoning** — attacker enrols *their* face under the victim's name | S / E | Account takeover at the root | Secure enrolment (identity proofing / step-up before enrol) | ⬜ |
 | T8 | **Repudiation** — user denies a transaction they made | R | Dispute / fraud | **Audit log** of every enrolment and match | ⬜ |
 | T9 | **Raw image exposure** — stored enrolment photos leak | I | Biometric + PII leak | **Store no raw image after enrolment** (keep only the encrypted vector) | ⬜ |
