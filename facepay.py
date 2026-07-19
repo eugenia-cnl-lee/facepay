@@ -24,6 +24,7 @@ from liveness import (
     draw_face_overlay,
     run_challenge,
 )
+import rate_limit
 import template_store
 from recognition import create_embedding, identify_face
 
@@ -136,6 +137,11 @@ def main():
     database = template_store.load_database()
     print(f"{len(database)} enrolled identities.\n")
 
+    locked, wait = rate_limit.locked_out()
+    if locked:
+        print(f"Locked: too many failed attempts. Try again in {wait}s. (anti hill-climbing)")
+        return
+
     landmarker = create_landmarker()
     camera = cv2.VideoCapture(0)
     if not camera.isOpened():
@@ -146,6 +152,7 @@ def main():
     print("Step 1 - prove you are live.")
     if not run_challenge(landmarker, camera, start_time):
         print("Liveness failed. Access denied.")
+        rate_limit.record("failure")
         cleanup(camera, landmarker)
         return
     print("Liveness passed.\n")
@@ -156,10 +163,12 @@ def main():
     if name == "NO_FACE":
         print("No face detected. Please re-run and face the camera after the challenge.")
     elif name == "UNKNOWN":
+        rate_limit.record("failure")
         print(f"Not recognised (closest distance {distance:.3f}).")
         if input("Enrol as a new user? [y/N]: ").strip().lower() == "y":
             enrol_live(camera, database, landmarker, start_time)
     else:
+        rate_limit.record("success")
         print(f"Recognised: {name} (distance {distance:.3f}).")
         take_payment(name)
 
