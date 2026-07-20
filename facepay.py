@@ -24,12 +24,8 @@ from liveness import (
     draw_face_overlay,
     run_challenge,
 )
-from recognition import (
-    KNOWN_FACES_DIRECTORY,
-    create_embedding,
-    enrol_faces,
-    identify_face,
-)
+import template_store
+from recognition import create_embedding, identify_face
 
 
 # Configuration
@@ -70,6 +66,8 @@ def scan_and_identify(camera, database, landmarker, start_time):
             return identify_face(SCAN_PATH, database)
         except ValueError:
             time.sleep(SCAN_RETRY_GAP_SECONDS)
+        finally:
+            SCAN_PATH.unlink(missing_ok=True)   # no raw image retained
 
     return "NO_FACE", float("inf")
 
@@ -82,18 +80,12 @@ def enrol_live(camera, database, landmarker, start_time):
         print("No name given; enrolment cancelled.")
         return
 
-    KNOWN_FACES_DIRECTORY.mkdir(exist_ok=True)
-
-    # clean re-enrolment: drop any previous photos/embeddings for this name
-    for old in KNOWN_FACES_DIRECTORY.glob(f"{name}_*"):
-        old.unlink()
-    database.pop(name, None)
-
+    database.pop(name, None)   # clean re-enrolment
     print(f"Capturing {ENROL_FRAMES} frames — look at the camera and move your head slightly...")
 
-    saved = 0
+    embeddings = []
     attempts = 0
-    while saved < ENROL_FRAMES and attempts < MAX_ENROL_ATTEMPTS:
+    while len(embeddings) < ENROL_FRAMES and attempts < MAX_ENROL_ATTEMPTS:
         attempts += 1
         frame = capture_frame(camera)
 
@@ -101,25 +93,26 @@ def enrol_live(camera, database, landmarker, start_time):
         landmarks = detect_landmarks(landmarker, frame, start_time)
         if landmarks is not None:
             draw_face_overlay(display, landmarks)
-        cv2.putText(display, f"Enrolling {name}: {saved}/{ENROL_FRAMES}", (20, 40),
+        cv2.putText(display, f"Enrolling {name}: {len(embeddings)}/{ENROL_FRAMES}", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
         cv2.imshow(WINDOW_NAME, display)
         cv2.waitKey(1)
 
-        path = KNOWN_FACES_DIRECTORY / f"{name}_{saved + 1}.jpg"
-        cv2.imwrite(str(path), frame)
+        cv2.imwrite(str(SCAN_PATH), frame)
         try:
-            embedding = create_embedding(path)
+            embedding = create_embedding(SCAN_PATH)
         except ValueError:
-            path.unlink(missing_ok=True)
             continue
+        finally:
+            SCAN_PATH.unlink(missing_ok=True)   # no raw image retained
 
-        database.setdefault(name, []).append(embedding)
-        saved += 1
+        embeddings.append(embedding)
         time.sleep(ENROL_FRAME_GAP_SECONDS)
 
-    if saved:
-        print(f"Enrolled {name} with {saved} frame(s). Next time you'll be recognised.")
+    if embeddings:
+        template_store.enrol_identity(name, embeddings)
+        database[name] = embeddings
+        print(f"Enrolled {name}: {len(embeddings)} encrypted template(s) stored, no raw image kept.")
     else:
         print("Enrolment failed — no clear face captured.")
 
@@ -139,8 +132,8 @@ def cleanup(camera, landmarker):
 
 
 def main():
-    print("Loading enrolled faces (this embeds known/, may take a moment)...")
-    database = enrol_faces()
+    print("Loading enrolled faces from the encrypted store...")
+    database = template_store.load_database()
     print(f"{len(database)} enrolled identities.\n")
 
     landmarker = create_landmarker()
