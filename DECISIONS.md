@@ -154,3 +154,11 @@ interview angle.
 - **Key nuances captured:** you **can't hash** a biometric (approximate matching → encrypt instead); **hill-climbing / similarity probing** → rate limiting; **template theft** → encryption at rest + no raw-image retention + store separation; face data is **GDPR Article 9** special-category.
 - **Scope call (1-day build):** going deep on threat model + encryption/key-management + rate-limiting (anti-hill-climbing) + audit logs; naming cancelable templates, key rotation, and frame-injection defence as explicit *future work* rather than pretending they're done.
 - **Interview angle:** *"Walk me through your threat model."* → the STRIDE + biometric table maps each attack to a control with honest implemented/planned status; the residual-risk section shows where it breaks.
+
+### D20 — Encrypted template store, no raw images (mitigates T5, T9)
+- **Decision:** Templates are persisted in **SQLite**, **encrypted at rest** with Fernet (AES). Identity records and biometric vectors live in **separate tables**. The raw enrolment frame is **deleted immediately after embedding** — only the encrypted vector is kept. The key lives in a file **outside** the database.
+- **Why encrypt, not hash:** face matching is *approximate* (cosine distance), so a one-way hash can't be compared — hashing would break matching entirely. Encryption keeps the vector usable while protecting it at rest.
+- **Why the extras:** separate tables = least privilege / compartmentalisation; no-raw-retention = data minimisation (GDPR); key-outside-DB = a stolen DB alone can't be decrypted.
+- **Honest limits (future work):** the key currently sits in a local gitignored file (`facepay.key`); production would use an env var / OS keystore / KMS. **Key rotation** and **cancelable templates** are not implemented.
+- **Side benefit:** the app now loads templates from the DB instead of re-embedding a folder every launch — startup is fast.
+- **Interview angle:** *"How did you protect the biometric data?"* → encrypt-not-hash (with the reason), store separation, no raw retention, and where the key lives (and honestly, where it should live).
