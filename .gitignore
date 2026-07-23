@@ -1,0 +1,18 @@
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+
+# VS Code workspace settings (optional)
+.vscode/
+
+# macOS files
+.DS_Store
+
+# Windows thumbnail cache
+Thumbs.db
