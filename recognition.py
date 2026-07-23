@@ -7,7 +7,7 @@ import numpy as np
 from deepface import DeepFace
 
 MODEL_NAME = "Facenet512"
-DISTANCE_THRESHOLD = 0.30    # below this = same person
+DISTANCE_THRESHOLD = 0.25    # evaluation-derived: loosest point with 0% false accepts (DECISIONS.md D10)
 KNOWN_FACES_DIRECTORY = Path("known")
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
