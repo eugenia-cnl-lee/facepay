@@ -16,3 +16,12 @@ __pycache__/
 
 # Windows thumbnail cache
 Thumbs.db
+
+# Face data — never committed.
+# Enrolled faces are personal biometric data; the LFW test set is regenerated
+# by running build_dataset.py. Repos hold code, not data.
+known/
+test/
+
+# Transient webcam capture
+scan.jpg
