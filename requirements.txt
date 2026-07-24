@@ -9,3 +9,6 @@ numpy==2.2.6
 
 # Dataset builder (Labeled Faces in the Wild)
 scikit-learn==1.9.0
+
+# Liveness detection (Tier 2)
+mediapipe==0.10.35
