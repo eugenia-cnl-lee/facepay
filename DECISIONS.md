@@ -92,11 +92,12 @@ interview angle.
 
 ---
 
-## Phase 2 — Liveness (planned, rationale locked in)
+## Phase 2 — Liveness
 
 ### D12 — Challenge–response liveness
 - **Decision:** Defeat spoofs with a **random** challenge (blink / head-turn) the user must perform on demand.
 - **Why:** A printed photo can't blink; a static image can't turn; a replayed video can't blink *exactly when randomly asked*. Randomness is what beats replay attacks.
+- **Implemented as:** a random target of 2–4 blinks within a 6-second window; PASS on reaching the target, FAIL on timeout. The per-attempt random count is the anti-replay mechanism.
 - **Interview angle:** *"Why did replay attacks perform worse than photo attacks?"* → because a replay can contain a blink, so it stresses the on-demand/timing aspect specifically.
 
 ### D13 — MediaPipe for landmarks (blink via Eye Aspect Ratio) over dlib

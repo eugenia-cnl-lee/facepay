@@ -59,7 +59,7 @@ python recognition.py
 # 3. Evaluate — accuracy across a range of decision thresholds
 python evaluate.py
 
-# 4. Liveness demo — watch the Eye Aspect Ratio drop when you blink
+# 4. Liveness challenge — blink on demand to pass a random challenge
 python liveness.py
 ```
 
@@ -69,7 +69,7 @@ python liveness.py
 | --- | --- |
 | `recognition.py` | Enrolment, embeddings, similarity matching, webcam scan, unknown-face rejection |
 | `build_dataset.py` | Builds `known/` and `test/` from the LFW dataset |
-| `liveness.py` | Blink-based liveness detection via Eye Aspect Ratio (MediaPipe) |
+| `liveness.py` | Blink challenge-response liveness (Eye Aspect Ratio via MediaPipe) |
 | `evaluate.py` | Reports false-accept / false-reject / misidentification rates per threshold |
 | `logging_setup.py` | Silences TensorFlow startup logs (imported before deepface) |
 | `requirements.txt` | Pinned Python dependencies |
