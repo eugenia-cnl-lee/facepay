@@ -26,7 +26,7 @@ from mediapipe.tasks.python import vision
 
 EAR_THRESHOLD = 0.21           # below this the eye counts as closed
 CONSECUTIVE_CLOSED_FRAMES = 1  # min closed frames per blink (1 catches fast blinks at low FPS)
-YAW_THRESHOLD = 0.5            # how far the head must turn to count (calibrate against the readout)
+YAW_THRESHOLD = 0.25           # how far the head must turn to count (calibrate against the readout)
 
 MIN_BLINKS = 2                 # blink challenge asks for a random count in [MIN_BLINKS, MAX_BLINKS]
 MAX_BLINKS = 4
