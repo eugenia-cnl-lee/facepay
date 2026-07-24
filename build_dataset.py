@@ -16,14 +16,14 @@ import cv2
 import numpy as np
 from sklearn.datasets import fetch_lfw_people
 
-# --- how big to make the dataset (keep modest so enrolment isn't slow) ---
+# how big to make the dataset (keep modest so enrolment isn't slow)
 NUM_ENROLLED_PEOPLE = 15       # LFW people added to known/ (the "citizens")
 ENROLL_IMAGES_PER_PERSON = 3   # reference photos stored per enrolled person
 GENUINE_TESTS_PER_PERSON = 2   # held-out photos of enrolled people, for testing
 NUM_STRANGERS = 15             # people put ONLY in test/stranger (never enrolled)
 STRANGER_IMAGES_PER_PERSON = 2
 
-KNOWN_DIR = Path("known")
+ENROLLED_DIR = Path("test") / "enrolled"
 GENUINE_DIR = Path("test") / "genuine"
 STRANGER_DIR = Path("test") / "stranger"
 
@@ -58,11 +58,11 @@ def main() -> None:
         NUM_ENROLLED_PEOPLE:NUM_ENROLLED_PEOPLE + NUM_STRANGERS
     ]
 
-    KNOWN_DIR.mkdir(exist_ok=True)
+    ENROLLED_DIR.mkdir(parents=True, exist_ok=True)
     GENUINE_DIR.mkdir(parents=True, exist_ok=True)
     STRANGER_DIR.mkdir(parents=True, exist_ok=True)
 
-    # --- enrolled people: some photos -> known/, some held out -> test/genuine/ ---
+    # enrolled people: reference photos -> test/enrolled/, held-out -> test/genuine/
     for label in enrolled_ids:
         name = names[label].replace(" ", "_")
         indices = by_person[label]
@@ -74,19 +74,19 @@ def main() -> None:
         ]
 
         for i, index in enumerate(enrol_indices, start=1):
-            save_image(images[index], KNOWN_DIR / f"{name}_{i}.jpg")
+            save_image(images[index], ENROLLED_DIR / f"{name}_{i}.jpg")
         for i, index in enumerate(genuine_indices, start=1):
             save_image(images[index], GENUINE_DIR / f"{name}_{i}.jpg")
 
-    # --- strangers: a couple of photos each, ONLY into test/stranger/ ---
+    # strangers: a couple of photos each, ONLY into test/stranger/
     for label in stranger_ids:
         name = names[label].replace(" ", "_")
         indices = by_person[label][:STRANGER_IMAGES_PER_PERSON]
         for i, index in enumerate(indices, start=1):
             save_image(images[index], STRANGER_DIR / f"{name}_{i}.jpg")
 
-    print(f"Done.")
-    print(f"  known/         {NUM_ENROLLED_PEOPLE} LFW people added (plus you)")
+    print("Done. (LFW is for evaluation only — it never touches known/.)")
+    print(f"  test/enrolled/ {NUM_ENROLLED_PEOPLE} LFW people (evaluation gallery)")
     print(f"  test/genuine/  held-out photos of enrolled people")
     print(f"  test/stranger/ {NUM_STRANGERS} people who are NOT enrolled")
 

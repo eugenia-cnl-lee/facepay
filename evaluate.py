@@ -13,6 +13,7 @@ from recognition import calculate_cosine_distance, create_embedding, enrol_faces
 
 #  Configuration
 
+ENROLLED_DIR = Path("test") / "enrolled"
 GENUINE_DIR = Path("test") / "genuine"
 STRANGER_DIR = Path("test") / "stranger"
 THRESHOLDS = [0.20, 0.25, 0.30, 0.35, 0.40, 0.45]
@@ -62,7 +63,7 @@ def score_directory(directory, database):
 # Report
 
 def main():
-    database = enrol_faces()
+    database = enrol_faces(ENROLLED_DIR)
 
     genuine = score_directory(GENUINE_DIR, database)
     strangers = score_directory(STRANGER_DIR, database)
