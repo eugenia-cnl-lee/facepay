@@ -38,13 +38,16 @@ NOSE_TIP = 1
 LEFT_EYE_OUTER = 33
 RIGHT_EYE_OUTER = 263
 
+IRIS_START_INDEX = 468   # landmarks 468-477 are the irises; skip them so eyes stay open
+MESH_OPACITY = 0.25      # lower = fainter, finer-looking mesh lines
+
 MODEL_PATH = Path("face_landmarker.task")
 MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
     "face_landmarker/float16/1/face_landmarker.task"
 )
 
-WINDOW_NAME = "Liveness challenge (ESC to cancel)"
+WINDOW_NAME = "FacePay"
 
 
 # Model
@@ -64,11 +67,22 @@ def create_landmarker():
 
 # Landmarks
 
+_last_timestamp_ms = -1
+
+
+def next_timestamp_ms(start_time):
+    global _last_timestamp_ms
+    timestamp = int((time.monotonic() - start_time) * 1000)
+    if timestamp <= _last_timestamp_ms:
+        timestamp = _last_timestamp_ms + 1  # force strictly increasing for MediaPipe
+    _last_timestamp_ms = timestamp
+    return timestamp
+
+
 def detect_landmarks(landmarker, frame, start_time):
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    timestamp_ms = int((time.monotonic() - start_time) * 1000)
-    result = landmarker.detect_for_video(mp_image, timestamp_ms)
+    result = landmarker.detect_for_video(mp_image, next_timestamp_ms(start_time))
 
     if not result.face_landmarks:
         return None
@@ -116,6 +130,39 @@ def show_result(display, text, color):
     cv2.waitKey(1500)
 
 
+def draw_face_mesh(display, landmarks):
+    height, width = display.shape[:2]
+
+    points = []
+    for index, landmark in enumerate(landmarks):
+        if index >= IRIS_START_INDEX:
+            continue
+        x = int((1 - landmark.x) * width)   # mirror x to match the flipped preview
+        y = int(landmark.y * height)
+        if 0 <= x < width and 0 <= y < height:
+            points.append((x, y))
+
+    if len(points) < 3:
+        return
+
+    subdiv = cv2.Subdiv2D((0, 0, width, height))
+    for pixel in points:
+        subdiv.insert((float(pixel[0]), float(pixel[1])))
+
+    overlay = display.copy()
+    for triangle in subdiv.getTriangleList():
+        corners = [
+            (int(triangle[0]), int(triangle[1])),
+            (int(triangle[2]), int(triangle[3])),
+            (int(triangle[4]), int(triangle[5])),
+        ]
+        if all(0 <= x < width and 0 <= y < height for x, y in corners):
+            cv2.polylines(overlay, [np.array(corners, dtype=np.int32)], True,
+                          (0, 255, 0), 1, cv2.LINE_AA)
+
+    cv2.addWeighted(overlay, MESH_OPACITY, display, 1 - MESH_OPACITY, 0, display)
+
+
 def draw_hud(display, title, detail, time_left):
     cv2.putText(display, title, (20, 40),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
@@ -153,6 +200,8 @@ def run_blink_challenge(landmarker, camera, start_time):
 
         time_left = max(0.0, deadline - time.monotonic())
         display = cv2.flip(frame, 1)
+        if landmarks is not None:
+            draw_face_mesh(display, landmarks)
         draw_hud(display, f"BLINK {required} TIMES",
                  f"Progress: {min(blink_count, required)}/{required}", time_left)
         cv2.imshow(WINDOW_NAME, display)
@@ -189,6 +238,8 @@ def run_turn_challenge(landmarker, camera, start_time):
 
         time_left = max(0.0, deadline - time.monotonic())
         display = cv2.flip(frame, 1)
+        if landmarks is not None:
+            draw_face_mesh(display, landmarks)
         draw_hud(display, f"TURN YOUR HEAD {direction}", f"yaw: {yaw:+.2f}", time_left)
         cv2.imshow(WINDOW_NAME, display)
 
