@@ -102,4 +102,11 @@ interview angle.
 ### D13 — MediaPipe for landmarks (blink via Eye Aspect Ratio) over dlib
 - **Decision:** Use MediaPipe Face Mesh landmarks + Eye Aspect Ratio for blink detection.
 - **Why:** dlib's landmark predictor is painful to install on Windows; MediaPipe is real-time on CPU and installs cleanly. EAR (eye height ÷ width) drops sharply on a blink — a simple, explainable signal, no training needed.
-- **Interview angle:** *"How does blink detection work without ML training?"* → Geometric landmark ratio over time.
+- **Implementation gotcha:** mediapipe 0.10.35 **removed the legacy `mp.solutions.face_mesh` API** — only the newer Tasks `FaceLandmarker` is available, which needs a `face_landmarker.task` model file (auto-downloaded on first run, git-ignored). Adapted to the Tasks API rather than downgrading mediapipe, because an older mediapipe would force `numpy < 2` and clash with TensorFlow's `numpy 2.x`.
+- **Interview angle:** *"How does blink detection work without ML training?"* → Geometric landmark ratio over time. Also a dependency-conflict story: resolved a removed-API break without breaking the numpy/TensorFlow version constraints.
+
+### D14 — Blink reliability is bounded by frame rate, not the threshold
+- **Scenario:** With a healthy resting EAR (~0.38) and blinks clearly dropping below 0.21, blinks were still *intermittently missed*.
+- **Cause:** On CPU, per-frame `IMAGE`-mode inference was slow enough that a ~100–150 ms blink sometimes fell entirely *between* two processed frames. Requiring 2 consecutive closed frames compounded it, dropping fast blinks.
+- **Fix:** Switched to MediaPipe `VIDEO` running mode (tracks between frames → higher effective FPS) and lowered the closed-frame requirement to 1. Added a rolling-minimum EAR readout so closures are visible for calibration.
+- **Interview angle:** *"What limited your liveness detection?"* → Temporal sampling: reliability depends on frame rate relative to blink duration, not the EAR threshold. Directly connects Tier 2 (liveness) to the Tier 7 latency study.
