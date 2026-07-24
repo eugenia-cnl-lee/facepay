@@ -25,3 +25,6 @@ test/
 
 # Transient webcam capture
 scan.jpg
+
+# Downloaded model asset (re-fetched on first run of liveness.py)
+face_landmarker.task

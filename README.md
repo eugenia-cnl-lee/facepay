@@ -13,7 +13,7 @@ identities, rejecting unknown faces, and evaluating accuracy across thresholds.
 | --- | --- |
 | **Python** | 3.11 recommended (developed on 3.11.9). Avoid 3.12+ — TensorFlow support lags. |
 | **Webcam** | Required for live scanning and enrolment (`recognition.py`). |
-| **Internet** | Needed on first run — downloads the FaceNet model (~90 MB) and the LFW dataset (~200 MB). Both are cached afterwards. |
+| **Internet** | Needed on first run — downloads the FaceNet model (~90 MB), the LFW dataset (~200 MB), and the MediaPipe face-landmark model (~4 MB). All cached afterwards. |
 | **Disk space** | ~500 MB free for models and the dataset. |
 | **OS** | Cross-platform; developed and tested on Windows 11. |
 
@@ -26,6 +26,7 @@ Installed via `requirements.txt`:
 - `opencv-python` — webcam capture and image I/O
 - `numpy` — vector maths for similarity
 - `scikit-learn` — downloads the LFW dataset for evaluation
+- `mediapipe` — face-mesh landmarks for blink-based liveness detection
 
 ## Installation
 
@@ -57,6 +58,9 @@ python recognition.py
 
 # 3. Evaluate — accuracy across a range of decision thresholds
 python evaluate.py
+
+# 4. Liveness demo — watch the Eye Aspect Ratio drop when you blink
+python liveness.py
 ```
 
 ## Project structure
@@ -65,6 +69,7 @@ python evaluate.py
 | --- | --- |
 | `recognition.py` | Enrolment, embeddings, similarity matching, webcam scan, unknown-face rejection |
 | `build_dataset.py` | Builds `known/` and `test/` from the LFW dataset |
+| `liveness.py` | Blink-based liveness detection via Eye Aspect Ratio (MediaPipe) |
 | `evaluate.py` | Reports false-accept / false-reject / misidentification rates per threshold |
 | `logging_setup.py` | Silences TensorFlow startup logs (imported before deepface) |
 | `requirements.txt` | Pinned Python dependencies |
