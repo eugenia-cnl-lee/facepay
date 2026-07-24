@@ -1,11 +1,11 @@
-"""Liveness detection — random blink challenge-response.
+"""Liveness detection — random challenge-response (blink or head-turn).
 
 Uses the MediaPipe Tasks FaceLandmarker (the legacy `mp.solutions` API was
 removed in mediapipe 0.10.35). The landmark model downloads on first run.
 
 Run:  python liveness.py
-The program picks a random number of blinks and a time limit, then passes or
-fails you. Press ESC to cancel.
+The program picks a random challenge (blink N times, or turn your head a
+direction) with a time limit, then passes or fails you. Press ESC to cancel.
 """
 
 import logging_setup  # noqa: F401  — MUST precede heavy imports; silences TF/absl logs
@@ -26,13 +26,17 @@ from mediapipe.tasks.python import vision
 
 EAR_THRESHOLD = 0.21           # below this the eye counts as closed
 CONSECUTIVE_CLOSED_FRAMES = 1  # min closed frames per blink (1 catches fast blinks at low FPS)
+YAW_THRESHOLD = 0.5            # how far the head must turn to count (calibrate against the readout)
 
-MIN_BLINKS = 2                 # challenge asks for a random count in [MIN_BLINKS, MAX_BLINKS]
+MIN_BLINKS = 2                 # blink challenge asks for a random count in [MIN_BLINKS, MAX_BLINKS]
 MAX_BLINKS = 4
-CHALLENGE_SECONDS = 6.0        # time allowed to complete the challenge
+CHALLENGE_SECONDS = 6.0        # time allowed to complete a challenge
 
 RIGHT_EYE = [33, 160, 158, 133, 153, 144]
 LEFT_EYE = [362, 385, 387, 263, 373, 380]
+NOSE_TIP = 1
+LEFT_EYE_OUTER = 33
+RIGHT_EYE_OUTER = 263
 
 MODEL_PATH = Path("face_landmarker.task")
 MODEL_URL = (
@@ -58,7 +62,18 @@ def create_landmarker():
     return vision.FaceLandmarker.create_from_options(options)
 
 
-# Eye Aspect Ratio
+# Landmarks
+
+def detect_landmarks(landmarker, frame, start_time):
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    timestamp_ms = int((time.monotonic() - start_time) * 1000)
+    result = landmarker.detect_for_video(mp_image, timestamp_ms)
+
+    if not result.face_landmarks:
+        return None
+    return result.face_landmarks[0]
+
 
 def eye_aspect_ratio(landmarks, eye_indices, frame_width, frame_height):
     points = [
@@ -72,23 +87,27 @@ def eye_aspect_ratio(landmarks, eye_indices, frame_width, frame_height):
     return vertical / (2.0 * horizontal)
 
 
-def detect_ear(landmarker, frame, start_time):
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    timestamp_ms = int((time.monotonic() - start_time) * 1000)
-    result = landmarker.detect_for_video(mp_image, timestamp_ms)
-
-    if not result.face_landmarks:
-        return None
-
-    landmarks = result.face_landmarks[0]
-    height, width = frame.shape[:2]
-    right = eye_aspect_ratio(landmarks, RIGHT_EYE, width, height)
-    left = eye_aspect_ratio(landmarks, LEFT_EYE, width, height)
+def average_ear(landmarks, frame_width, frame_height):
+    right = eye_aspect_ratio(landmarks, RIGHT_EYE, frame_width, frame_height)
+    left = eye_aspect_ratio(landmarks, LEFT_EYE, frame_width, frame_height)
     return (right + left) / 2.0
 
 
-# Challenge
+def head_yaw(landmarks):
+    nose_x = landmarks[NOSE_TIP].x
+    left_x = landmarks[LEFT_EYE_OUTER].x
+    right_x = landmarks[RIGHT_EYE_OUTER].x
+
+    eye_mid = (left_x + right_x) / 2.0
+    eye_dist = abs(right_x - left_x)
+    if eye_dist == 0:
+        return 0.0
+
+    # negate so the sign matches the mirrored on-screen preview (user's view)
+    return -(nose_x - eye_mid) / eye_dist
+
+
+# Result overlay
 
 def show_result(display, text, color):
     cv2.putText(display, text, (20, 200),
@@ -96,6 +115,17 @@ def show_result(display, text, color):
     cv2.imshow(WINDOW_NAME, display)
     cv2.waitKey(1500)
 
+
+def draw_hud(display, title, detail, time_left):
+    cv2.putText(display, title, (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+    cv2.putText(display, detail, (20, 80),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    cv2.putText(display, f"Time: {time_left:.1f}s", (20, 120),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 255), 2)
+
+
+# Blink challenge
 
 def run_blink_challenge(landmarker, camera, start_time):
     required = random.randint(MIN_BLINKS, MAX_BLINKS)
@@ -110,8 +140,10 @@ def run_blink_challenge(landmarker, camera, start_time):
         if not ok:
             return False
 
-        ear = detect_ear(landmarker, frame, start_time)
-        if ear is not None:
+        landmarks = detect_landmarks(landmarker, frame, start_time)
+        if landmarks is not None:
+            height, width = frame.shape[:2]
+            ear = average_ear(landmarks, width, height)
             if ear < EAR_THRESHOLD:
                 closed_frames += 1
             else:
@@ -121,23 +153,61 @@ def run_blink_challenge(landmarker, camera, start_time):
 
         time_left = max(0.0, deadline - time.monotonic())
         display = cv2.flip(frame, 1)
-        cv2.putText(display, f"BLINK {required} TIMES", (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-        cv2.putText(display, f"Progress: {min(blink_count, required)}/{required}", (20, 80),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-        cv2.putText(display, f"Time: {time_left:.1f}s", (20, 120),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 255), 2)
+        draw_hud(display, f"BLINK {required} TIMES",
+                 f"Progress: {min(blink_count, required)}/{required}", time_left)
         cv2.imshow(WINDOW_NAME, display)
 
         if cv2.waitKey(1) & 0xFF == 27:
             return False
-
         if blink_count >= required:
             show_result(display, "LIVENESS PASSED", (0, 200, 0))
             return True
         if time_left <= 0:
             show_result(display, "LIVENESS FAILED", (0, 0, 255))
             return False
+
+
+# Head-turn challenge
+
+def run_turn_challenge(landmarker, camera, start_time):
+    direction = random.choice(["LEFT", "RIGHT"])
+    deadline = time.monotonic() + CHALLENGE_SECONDS
+
+    print(f"Challenge: turn your head {direction} within {CHALLENGE_SECONDS:.0f} seconds.")
+
+    while True:
+        ok, frame = camera.read()
+        if not ok:
+            return False
+
+        landmarks = detect_landmarks(landmarker, frame, start_time)
+        yaw = head_yaw(landmarks) if landmarks is not None else 0.0
+        turned = (
+            (direction == "RIGHT" and yaw > YAW_THRESHOLD)
+            or (direction == "LEFT" and yaw < -YAW_THRESHOLD)
+        )
+
+        time_left = max(0.0, deadline - time.monotonic())
+        display = cv2.flip(frame, 1)
+        draw_hud(display, f"TURN YOUR HEAD {direction}", f"yaw: {yaw:+.2f}", time_left)
+        cv2.imshow(WINDOW_NAME, display)
+
+        if cv2.waitKey(1) & 0xFF == 27:
+            return False
+        if turned:
+            show_result(display, "LIVENESS PASSED", (0, 200, 0))
+            return True
+        if time_left <= 0:
+            show_result(display, "LIVENESS FAILED", (0, 0, 255))
+            return False
+
+
+# Dispatch
+
+def run_challenge(landmarker, camera, start_time):
+    if random.choice(["blink", "turn"]) == "blink":
+        return run_blink_challenge(landmarker, camera, start_time)
+    return run_turn_challenge(landmarker, camera, start_time)
 
 
 # Main
@@ -149,7 +219,7 @@ def main():
         raise RuntimeError("Could not open the webcam.")
 
     start_time = time.monotonic()
-    passed = run_blink_challenge(landmarker, camera, start_time)
+    passed = run_challenge(landmarker, camera, start_time)
     print("Result:", "PASS" if passed else "FAIL")
 
     camera.release()
