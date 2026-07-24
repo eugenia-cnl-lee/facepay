@@ -111,3 +111,11 @@ interview angle.
 - **Cause:** On CPU, per-frame `IMAGE`-mode inference was slow enough that a ~100–150 ms blink sometimes fell entirely *between* two processed frames. Requiring 2 consecutive closed frames compounded it, dropping fast blinks.
 - **Fix:** Switched to MediaPipe `VIDEO` running mode (tracks between frames → higher effective FPS) and lowered the closed-frame requirement to 1. Added a rolling-minimum EAR readout so closures are visible for calibration.
 - **Interview angle:** *"What limited your liveness detection?"* → Temporal sampling: reliability depends on frame rate relative to blink duration, not the EAR threshold. Directly connects Tier 2 (liveness) to the Tier 7 latency study.
+
+### D15 — Head-turn as a second challenge type (2D yaw proxy)
+- **Decision:** Add a "turn your head LEFT/RIGHT" challenge alongside blink. The challenge *type* and *direction* are picked at random each attempt.
+- **How:** Yaw is estimated from a 2D geometry proxy — nose-tip x-position relative to the midpoint between the outer eye corners, normalised by inter-eye distance — not a trained model.
+- **Why two types:** Random type + random parameter (blink count / turn direction) widens the space an attacker must cover — they can't pre-stage a single spoof clip that satisfies whatever is asked.
+- **Honest limitation:** this is a *2D* proxy for a *3D* head rotation. A flat photo physically rotated could partially fool it; genuinely robust liveness would use 3D head-pose (e.g. `solvePnP`) or a depth camera. Logged as a known gap, not hidden.
+- **Calibration:** the yaw threshold is tuned against an on-screen live `yaw:` readout, the same approach used for the EAR threshold.
+- **Interview angle:** *"How robust is your liveness, really?"* → Name the 2D-vs-3D limitation and the upgrade path (3D pose / depth). Showing you know where it breaks is stronger than claiming it's bulletproof.
