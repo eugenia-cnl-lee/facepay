@@ -47,7 +47,13 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run the scripts in this order:
+**The full app** — prove liveness, identify, enrol if new, then pay (simulated):
+
+```bash
+python facepay.py
+```
+
+Or run each component on its own:
 
 ```bash
 # 1. Build the dataset — enrolled users + genuine/stranger test sets (first run downloads LFW)
