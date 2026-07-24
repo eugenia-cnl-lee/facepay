@@ -73,6 +73,7 @@ python liveness.py
 
 | File | Purpose |
 | --- | --- |
+| `facepay.py` | End-to-end app: liveness gate → identify → live enrol → simulated payment |
 | `recognition.py` | Enrolment, embeddings, similarity matching, webcam scan, unknown-face rejection |
 | `build_dataset.py` | Builds `known/` and `test/` from the LFW dataset |
 | `liveness.py` | Challenge-response liveness: blink + head-turn (MediaPipe landmarks) |

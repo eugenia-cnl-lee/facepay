@@ -52,6 +52,7 @@ interview angle.
 - **Why:** RetinaFace is more accurate but heavy on CPU and downloads a model on first use (looked like a hang). OpenCV's detector ships built-in and is fast — fine for a clean webcam scan.
 - **Trade-off:** Lower detection accuracy on hard images for much lower latency and no download. This is a concrete **latency vs accuracy** decision to revisit in the Tier 7 architecture study.
 - **Interview angle:** *"What latency trade-offs did you make?"* → Detector choice is one; on-device vs cloud is the bigger one later.
+- **Update (reversed in D18):** OpenCV failed on live webcam frames — misidentification, and capturing only 1 of 5 enrolment frames. RetinaFace was tried but is broken under TF 2.21 / Keras 3 (`KerasTensor` error), so the recognition detector is now `yunet` — a DNN detector run through OpenCV's engine (no TensorFlow/Keras), accurate like RetinaFace but conflict-free.
 
 ### D8 — Resilient enrolment (skip undetectable photos)
 - **Decision:** If no single clean face is detected in an enrolment image, log and skip it instead of crashing.
@@ -119,3 +120,26 @@ interview angle.
 - **Honest limitation:** this is a *2D* proxy for a *3D* head rotation. A flat photo physically rotated could partially fool it; genuinely robust liveness would use 3D head-pose (e.g. `solvePnP`) or a depth camera. Logged as a known gap, not hidden.
 - **Calibration:** the yaw threshold is tuned against an on-screen live `yaw:` readout, the same approach used for the EAR threshold.
 - **Interview angle:** *"How robust is your liveness, really?"* → Name the 2D-vs-3D limitation and the upgrade path (3D pose / depth). Showing you know where it breaks is stronger than claiming it's bulletproof.
+
+---
+
+## Phase 3 — End-to-end integration
+
+### D16 — Liveness gates recognition (live → identify → pay)
+- **Decision:** The `facepay.py` flow runs the liveness challenge **first**; identification only happens if liveness passes.
+- **Why:** (1) Security — a spoof is rejected before it ever reaches identification or payment (defense in depth: liveness and identity are separate gates). (2) Efficiency — no expensive face-embedding is spent on a photo that fails liveness.
+- **Interview angle:** *"Why that order?"* → Cheapest, strongest gate first; never authorise or even identify something that hasn't proven it's live.
+- **Integration gotcha:** a turn/blink challenge leaves the user *mid-pose* (head turned, eyes shut), so identification must **re-acquire a frontal face** — the scan retries with a "look at the camera" prompt rather than grabbing one frame. Also normalised deepface's `FaceNotDetected` to a `ValueError` so all callers handle "no face" uniformly.
+
+### D17 — Live multi-frame enrolment (fixes the D5/D10 gap)
+- **Decision:** New users enrol from several **live webcam frames**, saved to `known/`, rather than from posed photos.
+- **Why:** The `0.369` gap (D5/D10) came from matching live scans against posed references. Enrolling from live frames makes genuine live scans land *below* the 0.25 threshold — fixing usability without loosening security. Multiple frames add pose/lighting variation for robustness (the same reason Face ID has you rotate your head).
+- **Interview angle:** *"How did you fix the false-reject problem?"* → Not by moving the threshold — by improving enrolment quality, because enrolment↔inference match matters more than the threshold.
+
+### D18 — Evaluation data must not live in the production gallery (misidentification fix)
+- **Scenario:** A live scan *confidently* misidentified the user as an enrolled LFW celebrity (Tony Blair, distance 0.132) — in payment terms, charging the wrong account: the D10 nightmare made real.
+- **Root cause:** `build_dataset.py` had loaded 15 LFW public figures into `known/`, so the live app's 1:N search pitted the user against celebrities. LFW was only ever meant for *evaluation* (D9), never the live product's enrolled users. A 1:N system's false-match probability grows with gallery size, so the gallery must contain only real principals.
+- **Fix:** LFW now goes to `test/enrolled/` (evaluation gallery) + `test/genuine` + `test/stranger`; `known/` holds only real enrolled users. `evaluate.py` enrols from `test/enrolled/`.
+- **Contributing factor → fixed:** the weak `opencv` Haar detector (D7) both failed on most raw webcam frames (only 1 of 5 enrolment frames captured) and produced less discriminative embeddings, helping a wrong match look confident. Switched the recognition detector to `yunet` — a DNN detector (RetinaFace was tried first but is incompatible with TF 2.21 / Keras 3). Note: the 0.25 threshold was derived with `opencv`, so it should be re-evaluated with the new detector.
+- **Also fixed:** a live-enrolment file-clobber bug — reused filenames could overwrite/delete earlier photos, so enrolment saved ~1 (poor) frame instead of 5. Re-enrolment now cleanly replaces a person's frames.
+- **Interview angle:** *"Tell me about a bug you found."* → Separating the evaluation dataset from the production identity store, plus the general principle that 1:N false-match risk scales with gallery size.
