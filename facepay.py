@@ -17,7 +17,13 @@ from pathlib import Path
 
 import cv2
 
-from liveness import WINDOW_NAME, create_landmarker, run_challenge
+from liveness import (
+    WINDOW_NAME,
+    create_landmarker,
+    detect_landmarks,
+    draw_face_overlay,
+    run_challenge,
+)
 from recognition import (
     KNOWN_FACES_DIRECTORY,
     create_embedding,
@@ -46,11 +52,14 @@ def capture_frame(camera):
     return frame
 
 
-def scan_and_identify(camera, database):
+def scan_and_identify(camera, database, landmarker, start_time):
     for _ in range(SCAN_ATTEMPTS):
         frame = capture_frame(camera)
 
         display = cv2.flip(frame, 1)
+        landmarks = detect_landmarks(landmarker, frame, start_time)
+        if landmarks is not None:
+            draw_face_overlay(display, landmarks)
         cv2.putText(display, "Look at the camera", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
         cv2.imshow(WINDOW_NAME, display)
@@ -67,7 +76,7 @@ def scan_and_identify(camera, database):
 
 # Live enrolment
 
-def enrol_live(camera, database):
+def enrol_live(camera, database, landmarker, start_time):
     name = input("New user — enter your name: ").strip().replace(" ", "_")
     if not name:
         print("No name given; enrolment cancelled.")
@@ -89,6 +98,9 @@ def enrol_live(camera, database):
         frame = capture_frame(camera)
 
         display = cv2.flip(frame, 1)
+        landmarks = detect_landmarks(landmarker, frame, start_time)
+        if landmarks is not None:
+            draw_face_overlay(display, landmarks)
         cv2.putText(display, f"Enrolling {name}: {saved}/{ENROL_FRAMES}", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
         cv2.imshow(WINDOW_NAME, display)
@@ -146,14 +158,14 @@ def main():
     print("Liveness passed.\n")
 
     print("Step 2 - identifying...")
-    name, distance = scan_and_identify(camera, database)
+    name, distance = scan_and_identify(camera, database, landmarker, start_time)
 
     if name == "NO_FACE":
         print("No face detected. Please re-run and face the camera after the challenge.")
     elif name == "UNKNOWN":
         print(f"Not recognised (closest distance {distance:.3f}).")
         if input("Enrol as a new user? [y/N]: ").strip().lower() == "y":
-            enrol_live(camera, database)
+            enrol_live(camera, database, landmarker, start_time)
     else:
         print(f"Recognised: {name} (distance {distance:.3f}).")
         take_payment(name)

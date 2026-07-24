@@ -38,8 +38,11 @@ NOSE_TIP = 1
 LEFT_EYE_OUTER = 33
 RIGHT_EYE_OUTER = 263
 
-IRIS_START_INDEX = 468   # landmarks 468-477 are the irises; skip them so eyes stay open
-MESH_OPACITY = 0.25      # lower = fainter, finer-looking mesh lines
+BRACKET_OPACITY = 0.5    # opacity of the corner brackets drawn around the face
+BRACKET_COLOR = (0, 255, 0)
+BRACKET_THICKNESS = 1
+BRACKET_LENGTH = 15      # length of each corner line (shorter = smaller brackets)
+BRACKET_PADDING = 20     # pixels to expand the face box outward
 
 MODEL_PATH = Path("face_landmarker.task")
 MODEL_URL = (
@@ -130,37 +133,29 @@ def show_result(display, text, color):
     cv2.waitKey(1500)
 
 
-def draw_face_mesh(display, landmarks):
+def face_bounding_box(landmarks, width, height):
+    xs = [(1 - landmark.x) * width for landmark in landmarks]   # mirror x for the flipped preview
+    ys = [landmark.y * height for landmark in landmarks]
+    return int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))
+
+
+def draw_face_overlay(display, landmarks):
     height, width = display.shape[:2]
-
-    points = []
-    for index, landmark in enumerate(landmarks):
-        if index >= IRIS_START_INDEX:
-            continue
-        x = int((1 - landmark.x) * width)   # mirror x to match the flipped preview
-        y = int(landmark.y * height)
-        if 0 <= x < width and 0 <= y < height:
-            points.append((x, y))
-
-    if len(points) < 3:
-        return
-
-    subdiv = cv2.Subdiv2D((0, 0, width, height))
-    for pixel in points:
-        subdiv.insert((float(pixel[0]), float(pixel[1])))
+    x1, y1, x2, y2 = face_bounding_box(landmarks, width, height)
+    x1 -= BRACKET_PADDING
+    y1 -= BRACKET_PADDING
+    x2 += BRACKET_PADDING
+    y2 += BRACKET_PADDING
+    corner = BRACKET_LENGTH
 
     overlay = display.copy()
-    for triangle in subdiv.getTriangleList():
-        corners = [
-            (int(triangle[0]), int(triangle[1])),
-            (int(triangle[2]), int(triangle[3])),
-            (int(triangle[4]), int(triangle[5])),
-        ]
-        if all(0 <= x < width and 0 <= y < height for x, y in corners):
-            cv2.polylines(overlay, [np.array(corners, dtype=np.int32)], True,
-                          (0, 255, 0), 1, cv2.LINE_AA)
+    for cx, cy, dx, dy in [
+        (x1, y1, 1, 1), (x2, y1, -1, 1), (x1, y2, 1, -1), (x2, y2, -1, -1),
+    ]:
+        cv2.line(overlay, (cx, cy), (cx + dx * corner, cy), BRACKET_COLOR, BRACKET_THICKNESS)
+        cv2.line(overlay, (cx, cy), (cx, cy + dy * corner), BRACKET_COLOR, BRACKET_THICKNESS)
 
-    cv2.addWeighted(overlay, MESH_OPACITY, display, 1 - MESH_OPACITY, 0, display)
+    cv2.addWeighted(overlay, BRACKET_OPACITY, display, 1 - BRACKET_OPACITY, 0, display)
 
 
 def draw_hud(display, title, detail, time_left):
@@ -201,7 +196,7 @@ def run_blink_challenge(landmarker, camera, start_time):
         time_left = max(0.0, deadline - time.monotonic())
         display = cv2.flip(frame, 1)
         if landmarks is not None:
-            draw_face_mesh(display, landmarks)
+            draw_face_overlay(display, landmarks)
         draw_hud(display, f"BLINK {required} TIMES",
                  f"Progress: {min(blink_count, required)}/{required}", time_left)
         cv2.imshow(WINDOW_NAME, display)
@@ -239,7 +234,7 @@ def run_turn_challenge(landmarker, camera, start_time):
         time_left = max(0.0, deadline - time.monotonic())
         display = cv2.flip(frame, 1)
         if landmarks is not None:
-            draw_face_mesh(display, landmarks)
+            draw_face_overlay(display, landmarks)
         draw_hud(display, f"TURN YOUR HEAD {direction}", f"yaw: {yaw:+.2f}", time_left)
         cv2.imshow(WINDOW_NAME, display)
 
