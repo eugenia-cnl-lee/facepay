@@ -1,17 +1,18 @@
-"""Liveness detection — live Eye Aspect Ratio (EAR) and blink counting.
+"""Liveness detection — random blink challenge-response.
 
 Uses the MediaPipe Tasks FaceLandmarker (the legacy `mp.solutions` API was
 removed in mediapipe 0.10.35). The landmark model downloads on first run.
 
 Run:  python liveness.py
-Press ESC to quit. Watch the EAR value collapse when you blink.
+The program picks a random number of blinks and a time limit, then passes or
+fails you. Press ESC to cancel.
 """
 
 import logging_setup  # noqa: F401  — MUST precede heavy imports; silences TF/absl logs
 
+import random
 import time
 import urllib.request
-from collections import deque
 from pathlib import Path
 
 import cv2
@@ -26,6 +27,10 @@ from mediapipe.tasks.python import vision
 EAR_THRESHOLD = 0.21           # below this the eye counts as closed
 CONSECUTIVE_CLOSED_FRAMES = 1  # min closed frames per blink (1 catches fast blinks at low FPS)
 
+MIN_BLINKS = 2                 # challenge asks for a random count in [MIN_BLINKS, MAX_BLINKS]
+MAX_BLINKS = 4
+CHALLENGE_SECONDS = 6.0        # time allowed to complete the challenge
+
 RIGHT_EYE = [33, 160, 158, 133, 153, 144]
 LEFT_EYE = [362, 385, 387, 263, 373, 380]
 
@@ -34,6 +39,8 @@ MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
     "face_landmarker/float16/1/face_landmarker.task"
 )
+
+WINDOW_NAME = "Liveness challenge (ESC to cancel)"
 
 
 # Model
@@ -65,40 +72,46 @@ def eye_aspect_ratio(landmarks, eye_indices, frame_width, frame_height):
     return vertical / (2.0 * horizontal)
 
 
-# Live loop
+def detect_ear(landmarker, frame, start_time):
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    timestamp_ms = int((time.monotonic() - start_time) * 1000)
+    result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-def main():
-    landmarker = create_landmarker()
+    if not result.face_landmarks:
+        return None
 
-    camera = cv2.VideoCapture(0)
-    if not camera.isOpened():
-        raise RuntimeError("Could not open the webcam.")
+    landmarks = result.face_landmarks[0]
+    height, width = frame.shape[:2]
+    right = eye_aspect_ratio(landmarks, RIGHT_EYE, width, height)
+    left = eye_aspect_ratio(landmarks, LEFT_EYE, width, height)
+    return (right + left) / 2.0
 
+
+# Challenge
+
+def show_result(display, text, color):
+    cv2.putText(display, text, (20, 200),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
+    cv2.imshow(WINDOW_NAME, display)
+    cv2.waitKey(1500)
+
+
+def run_blink_challenge(landmarker, camera, start_time):
+    required = random.randint(MIN_BLINKS, MAX_BLINKS)
+    deadline = time.monotonic() + CHALLENGE_SECONDS
     blink_count = 0
     closed_frames = 0
-    recent_ears = deque(maxlen=15)
-    start_time = time.monotonic()
-    print("Blink at the camera. Press ESC to quit.")
+
+    print(f"Challenge: blink {required} times in {CHALLENGE_SECONDS:.0f} seconds.")
 
     while True:
         ok, frame = camera.read()
         if not ok:
-            break
+            return False
 
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        timestamp_ms = int((time.monotonic() - start_time) * 1000)
-        result = landmarker.detect_for_video(mp_image, timestamp_ms)
-
-        ear = None
-        if result.face_landmarks:
-            landmarks = result.face_landmarks[0]
-            height, width = frame.shape[:2]
-            right = eye_aspect_ratio(landmarks, RIGHT_EYE, width, height)
-            left = eye_aspect_ratio(landmarks, LEFT_EYE, width, height)
-            ear = (right + left) / 2.0
-            recent_ears.append(ear)
-
+        ear = detect_ear(landmarker, frame, start_time)
+        if ear is not None:
             if ear < EAR_THRESHOLD:
                 closed_frames += 1
             else:
@@ -106,19 +119,38 @@ def main():
                     blink_count += 1
                 closed_frames = 0
 
+        time_left = max(0.0, deadline - time.monotonic())
         display = cv2.flip(frame, 1)
-        ear_label = f"EAR: {ear:.3f}" if ear is not None else "No face"
-        recent_min = f"min(15f): {min(recent_ears):.3f}" if recent_ears else "min(15f): --"
-        cv2.putText(display, ear_label, (20, 40),
+        cv2.putText(display, f"BLINK {required} TIMES", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-        cv2.putText(display, recent_min, (20, 80),
+        cv2.putText(display, f"Progress: {min(blink_count, required)}/{required}", (20, 80),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        cv2.putText(display, f"Time: {time_left:.1f}s", (20, 120),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 255), 2)
-        cv2.putText(display, f"Blinks: {blink_count}", (20, 120),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-        cv2.imshow("Liveness - EAR (ESC to quit)", display)
+        cv2.imshow(WINDOW_NAME, display)
 
         if cv2.waitKey(1) & 0xFF == 27:
-            break
+            return False
+
+        if blink_count >= required:
+            show_result(display, "LIVENESS PASSED", (0, 200, 0))
+            return True
+        if time_left <= 0:
+            show_result(display, "LIVENESS FAILED", (0, 0, 255))
+            return False
+
+
+# Main
+
+def main():
+    landmarker = create_landmarker()
+    camera = cv2.VideoCapture(0)
+    if not camera.isOpened():
+        raise RuntimeError("Could not open the webcam.")
+
+    start_time = time.monotonic()
+    passed = run_blink_challenge(landmarker, camera, start_time)
+    print("Result:", "PASS" if passed else "FAIL")
 
     camera.release()
     cv2.destroyAllWindows()
