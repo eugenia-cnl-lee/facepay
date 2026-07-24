@@ -5,6 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from deepface import DeepFace
+from deepface.modules.exceptions import FaceNotDetected
 
 MODEL_NAME = "Facenet512"
 DISTANCE_THRESHOLD = 0.25    # evaluation-derived: loosest point with 0% false accepts (DECISIONS.md D10)
@@ -14,12 +15,15 @@ SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 def create_embedding(image_path: Path) -> np.ndarray:
     """Create one FaceNet512 embedding from an image containing one face."""
-    results = DeepFace.represent(
-        img_path=str(image_path),
-        model_name=MODEL_NAME,
-        detector_backend="opencv",
-        enforce_detection=True,
-    )
+    try:
+        results = DeepFace.represent(
+            img_path=str(image_path),
+            model_name=MODEL_NAME,
+            detector_backend="yunet",
+            enforce_detection=True,
+        )
+    except FaceNotDetected as error:
+        raise ValueError(f"No face detected in {image_path}.") from error
 
     if len(results) != 1:
         raise ValueError(
