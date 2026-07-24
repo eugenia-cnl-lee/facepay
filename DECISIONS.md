@@ -143,3 +143,14 @@ interview angle.
 - **Contributing factor → fixed:** the weak `opencv` Haar detector (D7) both failed on most raw webcam frames (only 1 of 5 enrolment frames captured) and produced less discriminative embeddings, helping a wrong match look confident. Switched the recognition detector to `yunet` — a DNN detector (RetinaFace was tried first but is incompatible with TF 2.21 / Keras 3). Note: the 0.25 threshold was derived with `opencv`, so it should be re-evaluated with the new detector.
 - **Also fixed:** a live-enrolment file-clobber bug — reused filenames could overwrite/delete earlier photos, so enrolment saved ~1 (poor) frame instead of 5. Re-enrolment now cleanly replaces a person's frames.
 - **Interview angle:** *"Tell me about a bug you found."* → Separating the evaluation dataset from the production identity store, plus the general principle that 1:N false-match risk scales with gallery size.
+
+---
+
+## Phase 4 — Secure storage (Tier 3)
+
+### D19 — Threat-model-first security
+- **Decision:** Start Tier 3 with a written threat model (`THREAT-MODEL.md`) and build controls that mitigate *specific modelled threats*, not features for their own sake.
+- **Why:** Security is attacker-centric — a control only earns its place if it maps to a threat. A threat model is also the single highest-signal cybersecurity artifact in an interview.
+- **Key nuances captured:** you **can't hash** a biometric (approximate matching → encrypt instead); **hill-climbing / similarity probing** → rate limiting; **template theft** → encryption at rest + no raw-image retention + store separation; face data is **GDPR Article 9** special-category.
+- **Scope call (1-day build):** going deep on threat model + encryption/key-management + rate-limiting (anti-hill-climbing) + audit logs; naming cancelable templates, key rotation, and frame-injection defence as explicit *future work* rather than pretending they're done.
+- **Interview angle:** *"Walk me through your threat model."* → the STRIDE + biometric table maps each attack to a control with honest implemented/planned status; the residual-risk section shows where it breaks.

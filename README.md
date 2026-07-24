@@ -80,6 +80,8 @@ python liveness.py
 | `evaluate.py` | Reports false-accept / false-reject / misidentification rates per threshold |
 | `logging_setup.py` | Silences TensorFlow startup logs (imported before deepface) |
 | `requirements.txt` | Pinned Python dependencies |
+| `THREAT-MODEL.md` | Security threat model — assets, attackers, STRIDE + biometric threats, mitigations |
+| `DECISIONS.md` | Design decisions & interview-prep log |
 
 Face data (`known/`, `test/`) and webcam captures (`scan.jpg`) are git-ignored:
 they are personal biometric data and regenerable, so the repository holds code
