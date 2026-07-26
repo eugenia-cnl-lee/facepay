@@ -178,20 +178,18 @@ pip install -r requirements.txt
 
 ## Usage
 
-**The payment terminal (desktop app)** — a windowed pay-by-face device: type the amount on the
-keypad, approve with your face; higher amounts add a PIN or a second approver.
+**The payment terminal (desktop app)** — a frameless pay-by-face device. Build the frontend once,
+then run the app:
 
 ```bash
-python app.py
+cd frontend && npm install && npm run build && cd ..
+python web_app.py
 ```
 
-**Enrol users first (sign-up)** with the console app — the terminal only *pays*:
-
-```bash
-python facepay.py
-```
-
-First run has an empty encrypted store, so you enrol yourself live; subsequent runs recognise you.
+On first launch it opens the **owner terminal**: log in with your face (liveness + recognition) to start
+a session — an unrecognised face can register on the spot. Clients then pay with their face; higher
+amounts add a PIN or a second approver, and every payment is credited to the signed-in owner. Press
+**ESC** to end the session. The encrypted store starts empty, so the first person to sign in enrols live.
 
 **Evaluate recognition accuracy** (downloads LFW on first run):
 
@@ -224,10 +222,8 @@ python wallet.py refund <payment_id>     # payment id shown in history
 
 | File | Purpose |
 | --- | --- |
-| `app.py` | Desktop terminal GUI (customtkinter) — the pay-by-face device app |
-| `terminal.py` | Earlier full-screen OpenCV kiosk (superseded by `app.py`) |
-| `ui.py` | Drawing + click helpers for the OpenCV kiosk |
-| `facepay.py` | Console app: rate-limit → liveness → identify → live enrol → payment |
+| `web_app.py` | Desktop app: Flask + pywebview host running the flow and serving the UI over the real engine |
+| `frontend/` | React + Vite + Tailwind UI — the Secure Enclave dashboard (camera, telemetry, audit trail) |
 | `recognition.py` | Embeddings, similarity matching, unknown-face rejection |
 | `liveness.py` | Challenge–response liveness (blink + head-turn) and the face overlay |
 | `template_store.py` | Encrypted SQLite store; separate identity / biometric tables |
