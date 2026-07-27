@@ -39,7 +39,8 @@ LEFT_EYE_OUTER = 33
 RIGHT_EYE_OUTER = 263
 
 BRACKET_OPACITY = 0.95   # opacity of the corner brackets drawn around the face
-BRACKET_COLOR = (60, 255, 120)
+BRACKET_COLOR = (176, 255, 157)   # BGR for #9dffb0 — the UI's glow-green
+BRACKET_GLOW = 0.3       # glow halo strength (0 = none, 1 = strong)
 BRACKET_THICKNESS = 3
 BRACKET_LENGTH = 28      # length of each corner line (shorter = smaller brackets)
 BRACKET_PADDING = 22     # pixels to expand the face box outward
@@ -148,13 +149,24 @@ def draw_face_overlay(display, landmarks):
     y2 += BRACKET_PADDING
     corner = BRACKET_LENGTH
 
-    overlay = display.copy()
+    segments = []
     for cx, cy, dx, dy in [
         (x1, y1, 1, 1), (x2, y1, -1, 1), (x1, y2, 1, -1), (x2, y2, -1, -1),
     ]:
-        cv2.line(overlay, (cx, cy), (cx + dx * corner, cy), BRACKET_COLOR, BRACKET_THICKNESS)
-        cv2.line(overlay, (cx, cy), (cx, cy + dy * corner), BRACKET_COLOR, BRACKET_THICKNESS)
+        segments.append(((cx, cy), (cx + dx * corner, cy)))
+        segments.append(((cx, cy), (cx, cy + dy * corner)))
 
+    # Soft glow: thick lines on a black layer, blurred, blended faintly on top.
+    glow = np.zeros_like(display)
+    for p1, p2 in segments:
+        cv2.line(glow, p1, p2, BRACKET_COLOR, BRACKET_THICKNESS + 4)
+    glow = cv2.GaussianBlur(glow, (0, 0), 5)
+    cv2.addWeighted(display, 1.0, glow, BRACKET_GLOW, 0, display)
+
+    # Crisp brackets on top.
+    overlay = display.copy()
+    for p1, p2 in segments:
+        cv2.line(overlay, p1, p2, BRACKET_COLOR, BRACKET_THICKNESS)
     cv2.addWeighted(overlay, BRACKET_OPACITY, display, 1 - BRACKET_OPACITY, 0, display)
 
 
