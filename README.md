@@ -49,7 +49,7 @@ wide on surface features.
 - **Security engineering** — a written threat model (STRIDE + biometric-specific), encrypted templates at rest, rate limiting against hill-climbing, and an append-only audit log.
 - **Data & privacy** — GDPR Article 9 ("special category") handling: data minimisation, no raw-image retention, right-to-erasure, key/data separation.
 - **Evaluation methodology** — measured false-accept / false-reject / misidentification across thresholds on a public benchmark (LFW), and chose the operating point from the data.
-- **Software engineering** — modular components, pinned dependencies, honest documentation, and a decision log capturing the *why* behind each choice.
+- **Software engineering** — modular components with a clean UI/engine split (React desktop dashboard over a loopback Flask API, the recognition/liveness/risk engine reused unchanged behind it), pinned dependencies, honest documentation, and a decision log capturing the *why* behind each choice.
 
 ## Architecture — the authentication flow
 
@@ -71,6 +71,30 @@ flowchart LR
 
 Liveness runs **first as a gate** — a spoof is rejected before any expensive recognition or
 payment logic runs (defence in depth + efficiency).
+
+### The app shell — owner sessions
+
+FacePay ships as a **frameless desktop app** (`web_app.py`): a Flask server bound to
+`127.0.0.1:8730` inside a `pywebview` window, with a React "Secure Enclave" dashboard on top.
+The UI and the engine talk over a small loopback contract — `GET /api/video` (MJPEG camera
+stream), `GET /api/state` (JSON the UI polls every ~350 ms), and `POST /api/command` (UI
+actions) — while camera capture and the verification flow run in a background thread (the
+`Engine` in `web_app.py`). The Python engine modules above are reused unchanged behind that
+boundary.
+
+The device is modelled as a **store terminal with owner sessions**:
+
+- **On boot** it's an **owner terminal**. An owner signs in with **liveness + face** to open a
+  session; an unrecognised owner can register on the spot (5 encrypted templates).
+- **During a session**, clients **pay by face** (liveness → identify → risk-based step-up), and
+  every payment is **credited to the signed-in owner's** balance. Unrecognised paying clients are
+  offered in-app registration.
+- **Pressing ESC** prompts *"End this session, &lt;owner&gt;?"*; the owner re-confirms with
+  **liveness + face** to end it and close the app (a failed confirm returns to the session).
+- Accounts are a **single synced identity store** — a face enrolled owner-side or client-side is
+  recognised everywhere. Any enrolled identity can become a session owner (self-service
+  onboarding), but **dual-control approvers stay pre-provisioned** (never self-registered
+  mid-transaction) to preserve the two-person rule.
 
 ## How it works
 
@@ -151,6 +175,7 @@ A summary; the full analysis (assets, attacker profiles, STRIDE table, residual 
 | Requirement | Details |
 | --- | --- |
 | **Python** | 3.11 (developed on 3.11.9). Avoid 3.12+ — TensorFlow support lags. |
+| **Node.js** | 18+ — builds the React frontend (`npm install && npm run build`) that the desktop app serves. |
 | **Webcam** | Required for liveness, scanning, and enrolment. |
 | **Internet** | First run downloads models (FaceNet ~90 MB, MediaPipe landmarker ~4 MB) and, for evaluation, the LFW dataset (~200 MB). All cached. |
 | **Disk** | ~500 MB for models + dataset. |
@@ -159,7 +184,10 @@ A summary; the full analysis (assets, attacker profiles, STRIDE table, residual 
 **Python packages** (pinned in `requirements.txt`): `deepface` (FaceNet512 embeddings) ·
 `tensorflow` + `tf-keras` (backend) · `opencv-python` (capture, YuNet detector, drawing) ·
 `mediapipe` (liveness landmarks) · `numpy` · `scikit-learn` (LFW, evaluation) ·
-`cryptography` (template encryption).
+`cryptography` (template encryption) · `flask` (local API) · `pywebview` (frameless desktop window).
+
+**Frontend** (in `frontend/`, built with Node): React 19 + TypeScript + Vite + Tailwind CSS v4 —
+compiled to static assets that `web_app.py` serves.
 
 ## Installation
 

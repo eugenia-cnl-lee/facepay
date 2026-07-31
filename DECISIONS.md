@@ -223,3 +223,34 @@ interview angle.
 - **Separation of concerns:** enrolment (sign-up) is a console/admin action (`facepay.py`); the kiosk (`terminal.py`) only authenticates and pays.
 - **Interview angle:** *"Is this real or a simulation?"* → the security engine is real and functional; only settlement is sandboxed, which is standard for a prototype.
 - **Update — OpenCV was the wrong UI tool:** drawing text/shapes onto a webcam frame (`terminal.py`) always reads as debug output, not an app. Rebuilt the frontend as a real desktop GUI (`app.py`, **customtkinter**): a windowed device with a camera panel, a numeric keypad, and styled buttons. The camera runs in the Tk event loop; recognition runs in a **background thread** so the window never freezes. The engine is untouched — only the presentation layer changed.
+
+---
+
+## Phase 8 — Web frontend (React + Flask in a native window)
+
+### D27 — Pivot the desktop UI to a web frontend (React) served locally in a native window
+- **Decision:** Retire the Python-drawn UIs and rebuild the frontend as a **React 19 + TypeScript + Vite + Tailwind CSS v4** web app, served by a **local Flask server** inside a **pywebview** native desktop window (`web_app.py`).
+- **Why:** design fidelity — the UI was designed in Figma, which React/Tailwind can reproduce faithfully but customtkinter/OpenCV cannot; plus better maintainability and a far richer UI than a Python widget toolkit allows.
+- **Key framing:** the Python **security/CV engine is kept UNCHANGED** behind an HTTP/MJPEG boundary — the presentation layer is replaced, the engine is *not* rewritten. pywebview keeps it a native desktop app, not a browser tab.
+- **Interview angle:** *"Why swap the whole UI stack?"* → presentation-vs-engine separation done right: a clean HTTP seam let the UI be replaced wholesale while the proven auth engine stayed intact.
+
+### D28 — Remove the superseded Python UI prototypes; enrolment moves in-app
+- **Decision:** Delete the now-superseded Python UIs — `app.py` (customtkinter), `terminal.py`/`ui.py` (OpenCV kiosk), and `facepay.py` (console). Enrolment, previously the `facepay.py` console tool, **moves in-app**.
+- **Why:** they are all replaced by the single web frontend (D27); keeping dead UI variants around invites confusion about which is the real entry point. Folding enrolment into the app removes the last reason to drop to a console.
+- **Interview angle:** *"What happened to the old UIs?"* → consolidated to one frontend; enrolment is no longer a separate admin script (reverses the D26 console/kiosk split).
+
+### D29 — Frontend↔backend contract: loopback Flask + a background engine thread
+- **Decision:** The Flask server exposes three loopback endpoints: `GET /api/video` (MJPEG camera stream), `GET /api/state` (JSON state the UI **polls ~350 ms**), and `POST /api/command` (UI actions). Camera capture and the verification flow run on a **background thread** (the `Engine` class); the UI is a thin view over polled state.
+- **Why:** an MJPEG stream + polled JSON state + a command endpoint is the simplest contract that keeps the heavy CV/verification work off the request path and off the UI thread, while letting the React app stay declarative.
+- **Deliberate scope:** this is a **single-user local desktop app**, so the loopback endpoints are **unauthenticated** — acceptable here because nothing else can reach loopback. A **networked deployment would need auth + TLS + binding controls**; logged as an explicit boundary, not an oversight.
+- **Interview angle:** *"Is an unauthenticated API safe?"* → yes for a loopback-only single-user desktop app; name exactly what a networked version would have to add (auth, TLS, bind controls).
+
+### D30 — Owner-session device lifecycle (store / point-of-sale framing)
+- **Decision:** The app boots as an **OWNER TERMINAL**. The owner opens a session by logging in with **liveness + face**; during the session, clients **pay by face** and each payment is **credited to the signed-in owner**. Pressing **ESC** ends the session after an owner **liveness + face** check, then the app closes.
+- **Why:** it reframes the product from a single-payer kiosk (D26) to a **merchant point-of-sale**: an owner runs a session and collects payments from many clients, which is the realistic store setting. Gating both session *open* and *close* on owner biometrics stops a walk-up from opening or closing someone else's till.
+- **Interview angle:** *"Who does the money go to?"* → the signed-in owner for the duration of their biometric-gated session; opening and closing the session are both owner-authenticated.
+
+### D31 — Self-service session owners, but pre-provisioned dual-control approvers
+- **Decision:** **Any enrolled identity may become a session owner** (self-service owner onboarding on the owner side). **Dual-control approvers remain pre-provisioned** — never self-registered mid-transaction.
+- **Why:** owner onboarding should be low-friction so any enrolled user can start taking payments; but the **two-person rule** for high-value payments (D25) only means anything if the second approver is an independent, pre-designated human. Letting an approver self-register mid-transaction would collapse four-eyes back into one. Usability on the owner path, integrity preserved on the approver path.
+- **Interview angle:** *"Why can owners self-onboard but approvers can't?"* → different trust roles: an owner authorises their own session; a dual-control approver is a check *on* someone else, so it must be provisioned out-of-band, consistent with D25.
