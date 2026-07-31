@@ -608,7 +608,7 @@ def main():
     # easy_drag lets you move it by dragging the background. Owner logout closes it.
     window = webview.create_window("FacePay", f"http://127.0.0.1:{PORT}",
                                    width=1000, height=600, frameless=True, easy_drag=True,
-                                   resizable=False)
+                                   resizable=False, zoomable=False)
     engine.window = window
     webview.start()
 

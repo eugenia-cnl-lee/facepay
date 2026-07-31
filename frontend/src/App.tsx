@@ -39,6 +39,7 @@ export default function App() {
   const [amount, setAmount] = useState('');
   const [pin, setPin] = useState('');
   const [regName, setRegName] = useState('');
+  const [scale, setScale] = useState(1);
   const auditRef = useRef<HTMLDivElement>(null);
 
   // Poll live backend state
@@ -73,6 +74,39 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') post('logout'); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Lock page zoom: trackpad pinch arrives as ctrl+wheel and permanently zooms
+  // the webview, so the UI appears to creep bigger on every interaction.
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => { if (e.ctrlKey) e.preventDefault(); };
+    const onZoomKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '_', '0'].includes(e.key)) e.preventDefault();
+    };
+    const onGesture = (e: Event) => e.preventDefault();
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('keydown', onZoomKey);
+    document.addEventListener('gesturestart', onGesture);
+    document.addEventListener('gesturechange', onGesture);
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onZoomKey);
+      document.removeEventListener('gesturestart', onGesture);
+      document.removeEventListener('gesturechange', onGesture);
+    };
+  }, []);
+
+  // Fit the fixed 1000x600 design to the viewport — immune to any webview zoom drift.
+  // A ResizeObserver on <html> catches zoom changes (which alter the CSS viewport)
+  // even when a plain 'resize' event doesn't fire.
+  useEffect(() => {
+    const fit = () => setScale(Math.min(window.innerWidth / 1000, window.innerHeight / 600));
+    fit();
+    window.addEventListener('resize', fit);
+    const ro = new ResizeObserver(fit);
+    ro.observe(document.documentElement);
+    const iv = setInterval(fit, 500);  // safety net: re-fit even if no event fires
+    return () => { window.removeEventListener('resize', fit); ro.disconnect(); clearInterval(iv); };
   }, []);
 
   const phase = s?.phase ?? 'IDLE';
@@ -128,7 +162,11 @@ export default function App() {
     : s?.intent === 'logout' ? 'Confirm Logout' : 'Liveness Challenge';
 
   return (
-    <div className="fixed inset-0 bg-dream-dark overflow-hidden relative font-sans text-dream-silver">
+    <div className="fixed inset-0 bg-dream-dark overflow-hidden flex items-center justify-center font-sans text-dream-silver">
+      <div
+        style={{ width: 1000, height: 600, transform: `scale(${scale})`, transformOrigin: 'center' }}
+        className="relative overflow-hidden shrink-0"
+      >
       <div className="absolute top-1/3 left-1/4 w-[600px] h-[600px] bg-dream-purple/10 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
       <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-dream-blue/10 blur-[100px] rounded-full pointer-events-none mix-blend-screen" />
       <div className="noise-overlay" />
@@ -413,6 +451,7 @@ export default function App() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
