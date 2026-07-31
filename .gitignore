@@ -36,3 +36,7 @@ facepay.key
 
 # Wallet / financial data — never committed
 wallet.db
+
+# Frontend build artifacts (source in frontend/src is committed; these are regenerated)
+frontend/node_modules/
+frontend/dist/
