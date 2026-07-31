@@ -169,7 +169,6 @@ export default function App() {
       >
       <div className="absolute top-1/3 left-1/4 w-[600px] h-[600px] bg-dream-purple/10 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
       <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-dream-blue/10 blur-[100px] rounded-full pointer-events-none mix-blend-screen" />
-      <div className="noise-overlay" />
 
       <div className="w-full h-full flex dream-glass overflow-hidden z-10">
 
