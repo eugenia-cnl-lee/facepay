@@ -11,6 +11,12 @@ wide on surface features.
 
 ---
 
+## Documentation
+
+- **How to install, run, and use every feature** → [docs/UserGuide.md](docs/UserGuide.md)
+- **Design decisions & rationale — the *why* behind each choice** → [docs/DECISIONS.md](docs/DECISIONS.md)
+- **Threat model — assets, STRIDE + biometric threats, residual risk** → [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md)
+
 ## Features
 
 **Recognition**
@@ -120,7 +126,7 @@ rate vs blink duration — a real finding documented in the decision log.
 
 ### 3. Security (the biometric-security pillar)
 
-Anchored by a [threat model](THREAT-MODEL.md). Key controls:
+Anchored by a [threat model](docs/THREAT-MODEL.md). Key controls:
 
 - **Encrypted templates at rest** (Fernet/AES) — *not hashed*, because face matching is approximate; a hash can't be compared by distance. The key is stored **outside** the database.
 - **No raw-image retention** — enrolment frames are embedded then **deleted**; only the encrypted vector is kept.
@@ -157,7 +163,7 @@ so the chosen point is the *loosest threshold that still admits zero strangers*:
 ## Security controls → threats
 
 A summary; the full analysis (assets, attacker profiles, STRIDE table, residual risks) is in
-[THREAT-MODEL.md](THREAT-MODEL.md).
+[THREAT-MODEL.md](docs/THREAT-MODEL.md).
 
 | Threat | Mitigation | Status |
 |--------|-----------|:------:|
@@ -181,7 +187,7 @@ A summary; the full analysis (assets, attacker profiles, STRIDE table, residual 
 | **Disk** | ~500 MB for models + dataset. |
 | **OS** | Cross-platform; developed on Windows 11. |
 
-**Python packages** (pinned in `requirements.txt`): `deepface` (FaceNet512 embeddings) ·
+**Python packages** (pinned in `backend/requirements.txt`): `deepface` (FaceNet512 embeddings) ·
 `tensorflow` + `tf-keras` (backend) · `opencv-python` (capture, YuNet detector, drawing) ·
 `mediapipe` (liveness landmarks) · `numpy` · `scikit-learn` (LFW, evaluation) ·
 `cryptography` (template encryption) · `flask` (local API) · `pywebview` (frameless desktop window).
@@ -201,7 +207,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1     # macOS/Linux: source .venv/bin/activate
 
 # 3. Dependencies
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ## Usage
@@ -211,7 +217,7 @@ then run the app:
 
 ```bash
 cd frontend && npm install && npm run build && cd ..
-python web_app.py
+python backend/web_app.py
 ```
 
 On first launch it opens the **owner terminal**: log in with your face (liveness + recognition) to start
@@ -222,51 +228,52 @@ amounts add a PIN or a second approver, and every payment is credited to the sig
 **Evaluate recognition accuracy** (downloads LFW on first run):
 
 ```bash
-python build_dataset.py     # builds the evaluation gallery + test sets
-python evaluate.py          # prints the FAR / FRR / misidentification table
+python backend/build_dataset.py     # builds the evaluation gallery + test sets
+python backend/evaluate.py          # prints the FAR / FRR / misidentification table
 ```
 
 **Try liveness on its own:**
 
 ```bash
-python liveness.py          # random blink/head-turn challenge with a face overlay
+python backend/liveness.py          # random blink/head-turn challenge with a face overlay
 ```
 
 **Inspect the audit trail:**
 
 ```bash
-python -c "import audit; [print(r) for r in audit.recent()]"
+python -c "import sys; sys.path.insert(0, 'backend'); import audit; [print(r) for r in audit.recent()]"
 ```
 
 **Wallet — balance, history, refund:**
 
 ```bash
-python wallet.py balance eugenia
-python wallet.py history eugenia
-python wallet.py refund <payment_id>     # payment id shown in history
+python backend/wallet.py balance eugenia
+python backend/wallet.py history eugenia
+python backend/wallet.py refund <payment_id>     # payment id shown in history
 ```
 
 ## Project structure
 
-| File | Purpose |
+| Path | Purpose |
 | --- | --- |
-| `web_app.py` | Desktop app: Flask + pywebview host running the flow and serving the UI over the real engine |
+| `backend/web_app.py` | Desktop app: Flask + pywebview host running the flow and serving the UI over the real engine |
 | `frontend/` | React + Vite + Tailwind UI — the Secure Enclave dashboard (camera, telemetry, audit trail) |
-| `recognition.py` | Embeddings, similarity matching, unknown-face rejection |
-| `liveness.py` | Challenge–response liveness (blink + head-turn) and the face overlay |
-| `template_store.py` | Encrypted SQLite store; separate identity / biometric tables |
-| `wallet_store.py` | Accounts + wallet in a separate DB; atomic, idempotent, integer-money transfers + refunds |
-| `wallet.py` | Wallet CLI — `balance` / `history` / `refund` subcommands |
-| `rate_limit.py` | Persisted attempt-limiting / lockout (anti hill-climbing) |
-| `audit.py` | Append-only audit log |
-| `risk.py` | Risk engine — face-only vs step-up from amount + failure history |
-| `pin_auth.py` | PIN step-up (hashed PBKDF2) — knowledge factor for high-risk payments |
-| `approval.py` | Dual-control approver registry — second-person approval for very high-value payments |
-| `build_dataset.py` | Builds the LFW evaluation gallery + genuine/stranger test sets |
-| `evaluate.py` | FAR / FRR / misidentification across thresholds |
-| `logging_setup.py` | Silences TensorFlow startup logs (imported before deepface) |
-| `THREAT-MODEL.md` | Assets, attacker profiles, STRIDE + biometric threat table, residual risks |
-| `DECISIONS.md` | Design-decision & rationale log (the *why* behind each choice) |
+| `backend/recognition.py` | Embeddings, similarity matching, unknown-face rejection |
+| `backend/liveness.py` | Challenge–response liveness (blink + head-turn) and the face overlay |
+| `backend/template_store.py` | Encrypted SQLite store; separate identity / biometric tables |
+| `backend/wallet_store.py` | Accounts + wallet in a separate DB; atomic, idempotent, integer-money transfers + refunds |
+| `backend/wallet.py` | Wallet CLI — `balance` / `history` / `refund` subcommands |
+| `backend/rate_limit.py` | Persisted attempt-limiting / lockout (anti hill-climbing) |
+| `backend/audit.py` | Append-only audit log |
+| `backend/risk.py` | Risk engine — face-only vs step-up from amount + failure history |
+| `backend/pin_auth.py` | PIN step-up (hashed PBKDF2) — knowledge factor for high-risk payments |
+| `backend/approval.py` | Dual-control approver registry — second-person approval for very high-value payments |
+| `backend/build_dataset.py` | Builds the LFW evaluation gallery + genuine/stranger test sets |
+| `backend/evaluate.py` | FAR / FRR / misidentification across thresholds |
+| `backend/logging_setup.py` | Silences TensorFlow startup logs (imported before deepface) |
+| `docs/UserGuide.md` | How to install, run, and use every feature |
+| `docs/THREAT-MODEL.md` | Assets, attacker profiles, STRIDE + biometric threat table, residual risks |
+| `docs/DECISIONS.md` | Design-decision & rationale log (the *why* behind each choice) |
 
 **Not committed** (git-ignored): the encrypted store `faces.db` and its key `facepay.key`
 (biometric data + key never leave the machine), enrolment/test images, and transient captures.
@@ -274,7 +281,7 @@ The dataset is regenerated with `build_dataset.py`.
 
 ## Key engineering decisions
 
-A few of the documented decisions (full log in [DECISIONS.md](DECISIONS.md)):
+A few of the documented decisions (full log in [DECISIONS.md](docs/DECISIONS.md)):
 
 - **Local model over a cloud face API** — the deep pillars (secure templates, liveness, latency) need access to the raw embedding, which a hosted API hides.
 - **Encrypt, don't hash, templates** — approximate matching makes hashing unusable; this is the core biometric-security nuance.

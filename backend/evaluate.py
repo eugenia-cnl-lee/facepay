@@ -63,7 +63,7 @@ def score_directory(directory, database):
 # Report
 
 def main():
-    database = enrol_faces()
+    database = enrol_faces(ENROLLED_DIR)
 
     genuine = score_directory(GENUINE_DIR, database)
     strangers = score_directory(STRANGER_DIR, database)

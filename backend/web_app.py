@@ -47,7 +47,7 @@ ENROL_FRAMES = 5
 ENROL_FRAME_GAP = 0.4
 MAX_ENROL_ATTEMPTS = 30
 PORT = 8730
-FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
+FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
 money = wallet_store.format_money
 
